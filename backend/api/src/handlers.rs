@@ -1,8 +1,7 @@
 use actix_web::{web, HttpResponse, Responder};
 use serde::{Deserialize, Serialize};
 use dtl_infra::db::DbPool;
-use dtl_domain::{User, Transaction};
-use uuid::Uuid;
+use dtl_domain::Transaction;
 use serde_json::json;
 
 #[derive(Deserialize)]
