@@ -14,6 +14,7 @@ services:
         "--rpc-http-host=0.0.0.0",
         "--rpc-http-port=8545",
         "--rpc-http-cors-origins=*",
+        "--host-allowlist=*",
         "--rpc-http-api=ETH,NET,WEB3,QBFT,ADMIN,TXPOOL",
         "--rpc-ws-enabled=true",
         "--rpc-ws-host=0.0.0.0",
@@ -157,6 +158,24 @@ services:
     container_name: dtl-redis
     ports:
       - "6379:6379"
+    networks:
+      dtl-net:
+
+  # --- Scheduler (Go - Hangfire-like) ---
+  scheduler:
+    build:
+      context: ../scheduler
+      dockerfile: Dockerfile
+    container_name: dtl-scheduler
+    environment:
+      - BESU_RPC_URL=http://dtl-validator1:8545
+      - SCHEDULER_INTERVAL=10s
+      - LOG_FILE=/app/logs/blockchain_report.txt
+    volumes:
+      - ../scheduler/logs:/app/logs
+    depends_on:
+      - validator1
+    restart: unless-stopped
     networks:
       dtl-net:
 
