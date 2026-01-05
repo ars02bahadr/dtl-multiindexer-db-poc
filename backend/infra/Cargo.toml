@@ -1,0 +1,18 @@
+[package]
+name = "dtl-infra"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dtl-domain = { path = "../domain" }
+
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
+redis = { version = "0.24", features = ["tokio-comp"] }
+ethers = { version = "2.0", features = ["ws", "rustls"] }
+reqwest = { version = "0.11", features = ["json", "multipart"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+async-trait = "0.1"
+thiserror = "1.0"

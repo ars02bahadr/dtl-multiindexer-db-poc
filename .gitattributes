@@ -1,0 +1,6 @@
+* text=auto eol=lf
+*.rs linguist-language=Rust
+*.sol linguist-language=Solidity
+*.toml linguist-language=TOML
+*.yaml linguist-language=YAML
+*.yml linguist-language=YAML

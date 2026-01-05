@@ -1,0 +1,15 @@
+{
+  "name": "dtl-multiindexer-db-poc",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "pnpm -r test",
+    "dev": "pnpm -r dev"
+  },
+  "workspaces": [
+    "blockchain",
+    "frontend",
+    "sdk",
+    "scripts"
+  ]
+}

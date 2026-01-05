@@ -1,0 +1,148 @@
+services:
+  # --- Blockchain Network (Hyperledger Besu QBFT) ---
+  validator1:
+    image: hyperledger/besu:24.3
+    container_name: dtl-validator1
+    environment:
+      - BESU_PUBLIC_KEY_DIRECTORY=/opt/besu/keys
+    command:
+      [
+        "--config-file=/config/config.toml",
+        "--genesis-file=/config/genesis.json",
+        "--rpc-http-enabled",
+        "--rpc-http-port=8545",
+        "--rpc-ws-enabled",
+        "--rpc-ws-port=8546",
+        "--p2p-port=30303",
+        "--min-gas-price=0",
+      ]
+    volumes:
+      - ./besu/config.toml:/config/config.toml
+      - ./besu/genesis.json:/config/genesis.json
+      - ./besu/static-nodes.json:/opt/besu/data/static-nodes.json
+      - besu-validator1-data:/opt/besu/data
+    ports:
+      - "8545:8545"
+      - "8546:8546"
+      - "8547:8547"
+    networks:
+      dtl-net:
+        ipv4_address: 172.16.239.11
+
+  validator2:
+    image: hyperledger/besu:24.3
+    container_name: dtl-validator2
+    command:
+      [
+        "--config-file=/config/config.toml",
+        "--genesis-file=/config/genesis.json",
+        "--p2p-port=30303",
+        "--rpc-http-enabled=false",
+        "--rpc-ws-enabled=false",
+        "--min-gas-price=0",
+      ]
+    volumes:
+      - ./besu/config.toml:/config/config.toml
+      - ./besu/genesis.json:/config/genesis.json
+      - ./besu/static-nodes.json:/opt/besu/data/static-nodes.json
+      - besu-validator2-data:/opt/besu/data
+    networks:
+      dtl-net:
+        ipv4_address: 172.16.239.12
+
+  validator3:
+    image: hyperledger/besu:24.3
+    container_name: dtl-validator3
+    command:
+      [
+        "--config-file=/config/config.toml",
+        "--genesis-file=/config/genesis.json",
+        "--p2p-port=30303",
+        "--rpc-http-enabled=false",
+        "--rpc-ws-enabled=false",
+        "--min-gas-price=0",
+      ]
+    volumes:
+      - ./besu/config.toml:/config/config.toml
+      - ./besu/genesis.json:/config/genesis.json
+      - ./besu/static-nodes.json:/opt/besu/data/static-nodes.json
+      - besu-validator3-data:/opt/besu/data
+    networks:
+      dtl-net:
+        ipv4_address: 172.16.239.13
+
+  validator4:
+    image: hyperledger/besu:24.3
+    container_name: dtl-validator4
+    command:
+      [
+        "--config-file=/config/config.toml",
+        "--genesis-file=/config/genesis.json",
+        "--p2p-port=30303",
+        "--rpc-http-enabled=false",
+        "--rpc-ws-enabled=false",
+        "--min-gas-price=0",
+      ]
+    volumes:
+      - ./besu/config.toml:/config/config.toml
+      - ./besu/genesis.json:/config/genesis.json
+      - ./besu/static-nodes.json:/opt/besu/data/static-nodes.json
+      - besu-validator4-data:/opt/besu/data
+    networks:
+      dtl-net:
+        ipv4_address: 172.16.239.14
+
+  # --- Storage (IPFS) ---
+  ipfs0:
+    image: ipfs/kubo:latest
+    container_name: dtl-ipfs
+    environment:
+      - IPFS_SWARM_KEY_FILE=/data/ipfs/swarm.key
+      - IPFS_PROFILE=server
+    volumes:
+      - ./ipfs/swarm.key:/data/ipfs/swarm.key
+      - ipfs-data:/data/ipfs
+    ports:
+      - "4001:4001"
+      - "5001:5001"
+      - "8080:8080"
+    networks:
+      dtl-net:
+
+  # --- Database (Postgres & Redis) ---
+  db:
+    image: postgres:15-alpine
+    container_name: dtl-postgres
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: dtl_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      dtl-net:
+
+  redis:
+    image: redis:7-alpine
+    container_name: dtl-redis
+    ports:
+      - "6379:6379"
+    networks:
+      dtl-net:
+
+networks:
+  dtl-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.239.0/24
+
+volumes:
+  besu-validator1-data:
+  besu-validator2-data:
+  besu-validator3-data:
+  besu-validator4-data:
+  ipfs-data:
+  postgres-data:
