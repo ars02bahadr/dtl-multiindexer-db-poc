@@ -36,7 +36,19 @@ Kullanıcıların cüzdanlarını bağlayıp işlem yapabildikleri arayüz.
 - **Redis**: Hızlı veri erişimi ve önbellekleme için kullanılır.
 - **IPFS**: Merkeziyetsiz dosya depolama sistemi (örn. dokümanlar veya metadata için).
 
-### 5. SDK (Multi-Indexer Consensus)
+### 5. Scheduler (Go - Hangfire Benzeri)
+
+Blockchain ağını periyodik olarak izleyen ve raporlayan servis.
+
+- **Teknoloji:** Go 1.21, Alpine Linux tabanlı minimal Docker image.
+- **Özellikler:**
+  - Her 2 dakikada bir Besu blockchain'i sorgular
+  - Blok numarası, validator bilgisi, peer sayısı takibi
+  - ERC20 token transferlerini tespit eder
+  - Detaylı raporları TXT dosyasına yazar
+  - "A kişisi B kişisine X DTL gönderdi" formatında okunabilir çıktı
+
+### 6. SDK (Multi-Indexer Consensus)
 
 - **Güven Mekanizması**: İstemci tarafında "Trust Majority" (Çoğunluğa Güven) mantığıyla çalışan bir TypeScript kütüphanesi. Farklı indexer servislerinden gelen verileri çapraz doğrulayarak güvenliği artırır.
 
@@ -51,6 +63,7 @@ dtl-multiindexer-db-poc/
 ├── 📁 backend/             # Rust Workspace (Tüm arka uç servisleri)
 ├── 📁 frontend/            # Vue.js Cüzdan Uygulaması
 ├── 📁 blockchain/          # Akıllı Kontratlar (Hardhat)
+├── 📁 scheduler/           # Go Blockchain İzleme Servisi
 ├── 📁 sdk/                 # Client-side Doğrulama Kütüphanesi
 ├── 📁 infra/               # DevOps ve Sistem Kurulum Dosyaları
 └── 📄 docker-compose.yaml  # Orkestrasyon dosyası
@@ -111,7 +124,37 @@ Son kullanıcının etkileşime girdiği cüzdan arayüzü.
 
 ---
 
-### 4. 📦 SDK (Client-Side Verification)
+### 4. ⏱️ Scheduler (Go)
+
+Blockchain ağını periyodik olarak izleyen, Hangfire benzeri bir job scheduler servisi.
+
+- **`main.go`**: Ana uygulama dosyasıdır.
+  - **JSON-RPC İstemcisi**: Besu node'una HTTP üzerinden bağlanır.
+  - **Blok Takibi**: Güncel blok numarası, hash, timestamp ve validator bilgilerini alır.
+  - **Transfer Tespiti**: Son 10 bloktaki ERC20 token transferlerini tespit eder ve decode eder.
+  - **Rapor Oluşturma**: Detaylı blockchain raporlarını TXT dosyasına yazar.
+- **`Dockerfile`**: Multi-stage build ile minimal Alpine image oluşturur.
+- **`logs/blockchain_report.txt`**: Oluşturulan raporların tutulduğu dosya.
+
+Scheduler çıktı örneği:
+```
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  📅 BESU BLOCKCHAIN RAPORU - 2026-01-05 17:35:33                             ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  📦 GÜNCEL BLOK NUMARASI: 3230                                               ║
+║  👥 BAĞLI PEER SAYISI: 3                                                     ║
+╠══════════════════════════════════════════════════════════════════════════════╣
+║  💸 SON TRANSFER İŞLEMLERİ:                                                  ║
+║  🪙 TOKEN TRANSFER #1                                                        ║
+║     Gönderen: 0xa197...5585                                                  ║
+║     Alan    : 0x6273...ef57                                                  ║
+║     Miktar  : 500 DTL                                                        ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+```
+
+---
+
+### 5. 📦 SDK (Client-Side Verification)
 
 Bu proje "Multi-Indexer" (Çoklu İndeksleyici) mimarisini kullandığı için, verinin doğruluğu kritik önem taşır.
 
@@ -121,13 +164,33 @@ Bu proje "Multi-Indexer" (Çoklu İndeksleyici) mimarisini kullandığı için, 
 
 ---
 
-### 5. 🏗️ Altyapı ve DevOps
+### 6. 🏗️ Altyapı ve DevOps
 
-- **`docker-compose.yaml`**: Tüm sistemi tek komutla ayağa kaldıran orkestrasyon dosyasıdır.
-  - `validator1-4`: 4 adet Hyperledger Besu nodu (Blokzinciri Ağı).
-  - `ipfs`: Dosya depolama sunucusu.
+- **`infra/compose.yaml`**: Tüm sistemi tek komutla ayağa kaldıran orkestrasyon dosyasıdır.
+  - `validator1-4`: 4 adet Hyperledger Besu nodu (QBFT konsensüs ile).
+  - `ipfs0`: Özel IPFS ağı (swarm.key ile güvenli).
   - `postgres` & `redis`: Veritabanı servisleri.
-- **`infra/ipfs/swarm.key`**: Özel IPFS ağının güvenliği için kullanılan anahtar dosyasıdır. Sadece bu anahtara sahip node'lar ağa katılabilir.
+  - `scheduler`: Go tabanlı blockchain izleme servisi.
+- **`infra/besu/genesis.json`**: QBFT konsensüs için genesis bloğu. 4 validator adresi extraData'da RLP-encoded olarak tanımlanmıştır.
+- **`infra/besu/config.toml`**: Besu node konfigürasyonu (RPC, P2P, mining ayarları).
+- **`infra/besu/static-nodes.json`**: Validator'ların birbirini bulması için enode adresleri.
+- **`infra/besu/keys/`**: Her validator için özel anahtar dosyaları.
+- **`infra/ipfs/swarm.key`**: Özel IPFS ağının güvenliği için kullanılan anahtar dosyasıdır.
+
+---
+
+## 🔧 Validator Adresleri
+
+Proje, test amaçlı bilinen private key'ler kullanır (Ganache/Hardhat standart hesapları):
+
+| Validator | Private Key | Address |
+|-----------|-------------|---------|
+| validator1 | `0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c692be63` | `0xfe3b557e8fb62b89f4916b721be55ceb828dbd73` |
+| validator2 | `0xc87509a1c067bbde78beb793e6fa76530b6382a4c0241e5e4a9ec0a0f44dc0d3` | `0x627306090abab3a6e1400e9345bc60c78a8bef57` |
+| validator3 | `0xae6ae8e5ccbfb04590405997ee2d52d2b330726137b875053c36d94e974d162f` | `0xf17f52151ebef6c7334fad080c5704d77216b732` |
+| validator4 | `0x0dbbe8e4ae425a6d2687f1a7e3ba17bc98c673636790f1b8ad91193c05875ef1` | `0xc5fdf4076b8f3a5357c5e395ab970b5b54098fef` |
+
+> ⚠️ **Uyarı**: Bu key'ler sadece geliştirme/test amaçlıdır. Production ortamında kesinlikle kullanmayın!
 
 ## 🚀 Kurulum ve Çalıştırma
 
