@@ -169,8 +169,9 @@ services:
     container_name: dtl-scheduler
     environment:
       - BESU_RPC_URL=http://dtl-validator1:8545
-      - SCHEDULER_INTERVAL=10s
+      - SCHEDULER_INTERVAL=30s
       - LOG_FILE=/app/logs/blockchain_report.txt
+      - OPENCBDC_URL=mock
     volumes:
       - ../scheduler/logs:/app/logs
     depends_on:
