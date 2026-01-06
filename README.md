@@ -1,6 +1,14 @@
 # Dijital Türk Lirası (DTL) - Multi-Indexer DB PoC
 
-Bu proje, **Dijital Türk Lirası (DTL)** ekosistemi için geliştirilmiş kapsamlı bir **Proof of Concept (Kavram Kanıtı)** çalışmasıdır. Proje, merkeziyetsiz bir blokzinciri ağı, olay tabanlı (event-driven) bir arka uç, modern bir kullanıcı arayüzü ve akıllı veri doğrulama mekanizmalarını içerir.
+Bu proje, **Dijital Türk Lirası (DTL)** ekosistemi için geliştirilmiş kapsamlı bir **Proof of Concept (Kavram Kanıtı)** çalışmasıdır. Proje, merkeziyetsiz bir blokzinciri ağı, olay tabanlı (event-driven) bir arka uç, modern bir kullanıcı arayüzü, akıllı veri doğrulama mekanizmalarını ve **OpenCBDC entegrasyonunu** içerir.
+
+## ✨ Son Güncellemeler
+
+- ✅ **OpenCBDC Entegrasyonu:** Scheduler artık ERC20 transferlerini otomatik olarak CBDC sistemine aktarıyor
+- ✅ **Kod Yeniden Yapılandırma:** Scheduler modüler hale getirildi (main.go, model.go, payment.go)
+- ✅ **Akıllı Loglama:** Sadece gerçek transfer olduğunda log dosyasına yazılıyor
+- ✅ **Docker Desteği:** Tüm sistem container'larda çalışabiliyor
+- ✅ **Gelişmiş Monitoring:** Son 30 blok kontrolü, detaylı CBDC raporları
 
 ## 🏗 Proje Mimarisi
 
@@ -36,19 +44,50 @@ Kullanıcıların cüzdanlarını bağlayıp işlem yapabildikleri arayüz.
 - **Redis**: Hızlı veri erişimi ve önbellekleme için kullanılır.
 - **IPFS**: Merkeziyetsiz dosya depolama sistemi (örn. dokümanlar veya metadata için).
 
-### 5. Scheduler (Go - Hangfire Benzeri)
+### 5. Scheduler (Go - Hangfire Benzeri) + OpenCBDC Entegrasyonu
 
-Blockchain ağını periyodik olarak izleyen ve raporlayan servis.
+Blockchain ağını periyodik olarak izleyen ve raporlayan servis. Şimdi **OpenCBDC** entegrasyonu ile gerçek CBDC transferlerini de destekler.
 
 - **Teknoloji:** Go 1.21, Alpine Linux tabanlı minimal Docker image.
 - **Özellikler:**
-  - Her 2 dakikada bir Besu blockchain'i sorgular
+  - Her 30 saniyede bir Besu blockchain'i sorgular
   - Blok numarası, validator bilgisi, peer sayısı takibi
-  - ERC20 token transferlerini tespit eder
+  - ERC20 token transferlerini tespit eder ve decode eder
+  - **OpenCBDC entegrasyonu:** Token transferlerini CBDC sistemine aktarır
   - Detaylı raporları TXT dosyasına yazar
   - "A kişisi B kişisine X DTL gönderdi" formatında okunabilir çıktı
+  - **Akıllı loglama:** Sadece gerçek transfer olduğunda dosyaya yazar
 
-### 6. SDK (Multi-Indexer Consensus)
+#### Dosya Yapısı:
+```
+scheduler/
+├── main.go          # Ana scheduler döngüsü ve blockchain RPC çağrıları
+├── model.go         # Tüm struct tanımları (JSONRPC, Transaction, UTXO vb.)
+├── payment.go       # OpenCBDC client'ları ve CBDC transfer işlemleri
+├── Dockerfile       # Multi-stage build
+└── logs/
+    ├── blockchain_report.txt  # Blockchain transfer logları
+    └── opencbdc_report.txt    # CBDC işlem detayları
+```
+
+#### OpenCBDC Entegrasyonu:
+- **HTTP Client:** Gerçek OpenCBDC API'sine bağlanır
+- **Mock Client:** Geliştirme için dahili simülasyon
+- **UTXO Modeli:** Bitcoin benzeri transaction yapısı
+- **Coin Selection:** Transfer için uygun UTXO'ları seçer
+- **Transaction Broadcasting:** CBDC ağında transfer yayınlar
+
+### 6. OpenCBDC Entegrasyonu
+
+**Central Bank Digital Currency (CBDC)** sistemi entegrasyonu.
+
+- **UTXO Modeli:** Bitcoin benzeri transaction yapısı
+- **HTTP API:** Gerçek OpenCBDC node'una bağlanır
+- **Mock Client:** Geliştirme ortamı için simülasyon
+- **Coin Selection:** Transfer için optimal UTXO seçimi
+- **Transaction Broadcasting:** CBDC ağında transfer yayınlama
+
+### 7. SDK (Multi-Indexer Consensus)
 
 - **Güven Mekanizması**: İstemci tarafında "Trust Majority" (Çoğunluğa Güven) mantığıyla çalışan bir TypeScript kütüphanesi. Farklı indexer servislerinden gelen verileri çapraz doğrulayarak güvenliği artırır.
 
@@ -63,7 +102,7 @@ dtl-multiindexer-db-poc/
 ├── 📁 backend/             # Rust Workspace (Tüm arka uç servisleri)
 ├── 📁 frontend/            # Vue.js Cüzdan Uygulaması
 ├── 📁 blockchain/          # Akıllı Kontratlar (Hardhat)
-├── 📁 scheduler/           # Go Blockchain İzleme Servisi
+├── 📁 scheduler/           # Go Blockchain İzleme + OpenCBDC Servisi
 ├── 📁 sdk/                 # Client-side Doğrulama Kütüphanesi
 ├── 📁 infra/               # DevOps ve Sistem Kurulum Dosyaları
 └── 📄 docker-compose.yaml  # Orkestrasyon dosyası
@@ -138,19 +177,20 @@ Blockchain ağını periyodik olarak izleyen, Hangfire benzeri bir job scheduler
 
 Scheduler çıktı örneği:
 ```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║  📅 BESU BLOCKCHAIN RAPORU - 2026-01-05 17:35:33                             ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  📦 GÜNCEL BLOK NUMARASI: 3230                                               ║
-║  👥 BAĞLI PEER SAYISI: 3                                                     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  💸 SON TRANSFER İŞLEMLERİ:                                                  ║
-║  🪙 TOKEN TRANSFER #1                                                        ║
-║     Gönderen: 0xa197...5585                                                  ║
-║     Alan    : 0x6273...ef57                                                  ║
-║     Miktar  : 500 DTL                                                        ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+2026/01/06 20:50:25 ========== Running scheduled job ==========
+2026/01/06 20:50:25 📦 Current block number: 5930
+2026/01/06 20:50:25 💸 Found 1 transactions in last 30 blocks
+2026/01/06 20:50:25 📡 [Mock] Transaction Broadcasted internally:
+2026/01/06 20:50:25    Inputs: 1, Outputs: 2
+2026/01/06 20:50:25    Memo/Data: IPFS:TODO_EXTRACT_FROM_LOGS
+2026/01/06 20:50:25    💸 OpenCBDC Payment Logged | 0xa197...5585 -> 0x6273...ef57 : 200 DTL (30ms)
+2026/01/06 20:50:25    📝 Logged: 0xa197...5585 -> 0x6273...ef57 : 200 DTL
+2026/01/06 20:50:25 ✅ Job completed in 31.038375ms
 ```
+
+**Log Dosyaları:**
+- `blockchain_report.txt`: Sadece transfer satırları (başlangıç/kapanış mesajları yok)
+- `opencbdc_report.txt`: Detaylı CBDC işlem raporları (UTXO'lar, coin selection vb.)
 
 ---
 
@@ -195,3 +235,58 @@ Proje, test amaçlı bilinen private key'ler kullanır (Ganache/Hardhat standart
 ## 🚀 Kurulum ve Çalıştırma
 
 Tüm sistemi çalıştırmak için aşağıdaki adımları izleyebilirsiniz (Detaylar `WALKTHROUGH.md` dosyasındadır).
+
+### Docker ile Çalıştırma (Önerilen)
+
+```bash
+# Tüm sistemi başlat
+cd infra
+docker compose up -d
+
+# Logları takip et
+docker logs -f dtl-scheduler
+```
+
+### Manuel Çalıştırma
+
+```bash
+# 1. Blockchain ağı
+cd infra
+docker compose up -d validator1 validator2 validator3 validator4
+
+# 2. Backend servisleri
+cd ../backend
+cargo build --release
+cargo run --bin dtl-api &
+cargo run --bin dtl-event-listener &
+
+# 3. Frontend
+cd ../frontend
+npm install
+npm run dev
+
+# 4. Scheduler (Go)
+cd ../scheduler
+go run main.go model.go payment.go
+```
+
+### Environment Variables
+
+| Variable | Default | Açıklama |
+|----------|---------|----------|
+| `BESU_RPC_URL` | `http://localhost:8545` | Besu RPC endpoint |
+| `SCHEDULER_INTERVAL` | `30s` | Kontrol aralığı |
+| `OPENCBDC_URL` | `mock` | OpenCBDC API URL (mock için boş bırakın) |
+| `LOG_FILE` | `./logs/blockchain_report.txt` | Log dosyası yolu |
+
+### Test Transfer Gönderme
+
+```bash
+# Hardhat console'dan
+cd blockchain
+npx hardhat console --network localhost
+
+# Token transfer
+const token = await ethers.getContractAt("MoneyToken", "DEPLOYED_CONTRACT_ADDRESS")
+await token.transfer("0x627306090abab3a6e1400e9345bc60c78a8bef57", ethers.parseEther("100"))
+```

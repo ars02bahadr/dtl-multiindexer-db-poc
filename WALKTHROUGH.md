@@ -93,7 +93,7 @@ _Access at http://localhost:5173_ (or port shown).
 
 ## 6. Monitor Blockchain with Scheduler
 
-The Go scheduler automatically monitors the blockchain every 2 minutes and logs reports.
+The Go scheduler automatically monitors the blockchain every **30 seconds** and logs reports. It also integrates with **OpenCBDC** to automatically process DTL transfers as CBDC transactions.
 
 ### View Scheduler Logs
 
@@ -101,25 +101,23 @@ The Go scheduler automatically monitors the blockchain every 2 minutes and logs 
 # Real-time Docker logs
 docker logs -f dtl-scheduler
 
-# Or view the report file
+# Or view the report files
 tail -f scheduler/logs/blockchain_report.txt
+tail -f scheduler/logs/opencbdc_report.txt
 ```
 
 ### Scheduler Output Example
 
 ```
-╔══════════════════════════════════════════════════════════════════════════════╗
-║  📅 BESU BLOCKCHAIN RAPORU - 2026-01-05 17:35:33                             ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  📦 GÜNCEL BLOK NUMARASI: 3230                                               ║
-║  👥 BAĞLI PEER SAYISI: 3                                                     ║
-╠══════════════════════════════════════════════════════════════════════════════╣
-║  💸 SON TRANSFER İŞLEMLERİ (Son 10 blok):                                    ║
-║  🪙 TOKEN TRANSFER #1                                                        ║
-║     Gönderen: 0xa197...5585                                                  ║
-║     Alan    : 0x6273...ef57                                                  ║
-║     Miktar  : 500 DTL                                                        ║
-╚══════════════════════════════════════════════════════════════════════════════╝
+2026/01/06 20:50:25 ========== Running scheduled job ==========
+2026/01/06 20:50:25 📦 Current block number: 5930
+2026/01/06 20:50:25 💸 Found 1 transactions in last 30 blocks
+2026/01/06 20:50:25 📡 [Mock] Transaction Broadcasted internally:
+2026/01/06 20:50:25    Inputs: 1, Outputs: 2
+2026/01/06 20:50:25    Memo/Data: IPFS:TODO_EXTRACT_FROM_LOGS
+2026/01/06 20:50:25    💸 OpenCBDC Payment Logged | 0xa197...5585 -> 0x6273...ef57 : 200 DTL (30ms)
+2026/01/06 20:50:25    📝 Logged: 0xa197...5585 -> 0x6273...ef57 : 200 DTL
+2026/01/06 20:50:25 ✅ Job completed in 31.038375ms
 ```
 
 ### Configure Scheduler Interval
@@ -129,10 +127,19 @@ Edit `infra/compose.yaml` to change the interval:
 ```yaml
 scheduler:
   environment:
-    - SCHEDULER_INTERVAL=10s  # Options: 10s, 1m, 2m, 5m, etc.
+    - SCHEDULER_INTERVAL=30s  # Options: 10s, 30s, 1m, 2m, 5m, etc.
 ```
 
 Then restart: `docker compose up -d scheduler`
+
+### Scheduler Features
+
+- **Blockchain Monitoring:** Checks last 30 blocks for ERC20 transfers
+- **OpenCBDC Integration:** Automatically processes DTL transfers as CBDC transactions
+- **Smart Logging:** Only writes to files when actual transfers occur
+- **Dual Log Files:**
+  - `blockchain_report.txt`: Transfer summary lines
+  - `opencbdc_report.txt`: Detailed CBDC transaction reports
 
 ## 7. End-to-End Test Scenarios
 
@@ -152,12 +159,10 @@ Then restart: `docker compose up -d scheduler`
    - Backend logs show "submitted".
    - Toast/Status in UI says "Tx Hash: ...".
    - Besu logs (`docker logs dtl-validator1`) show transaction processing.
-   - **Scheduler report** shows the transfer within 2 minutes:
+   - **Scheduler logs** show the transfer within 30 seconds (only when transfers occur):
      ```
-     ║  🪙 TOKEN TRANSFER #1                                                        ║
-     ║     Gönderen: 0xa197...5585                                                  ║
-     ║     Alan    : 0x6273...ef57                                                  ║
-     ║     Miktar  : 500 DTL                                                        ║
+     2024/01/15 10:30:15 Processing DTL transfer: 0xa197...5585 -> 0x6273...ef57, amount: 500
+     2024/01/15 10:30:15 OpenCBDC transaction submitted successfully: tx_hash_123
      ```
 
 ### Scenario C: SDK Consensus (Code Check)
@@ -185,7 +190,9 @@ const balance = await client.query("/balance/0x123...");
 ### Scheduler Issues
 
 - **"Error getting block number"**: Validator might not be ready. Wait a few seconds and restart scheduler.
-- **Transfers not showing**: Scheduler only checks last 10 blocks. If transfer was earlier, it won't appear.
+- **Transfers not showing**: Scheduler runs every 30 seconds and checks the last 30 blocks for new transfers. If no transfers occurred recently, no logs will appear (this is normal behavior).
+- **OpenCBDC connection failed**: Ensure `OPENCBDC_URL=mock` in compose.yaml for development, or provide valid OpenCBDC API URL.
+- **No log files created**: This is normal - logs are only written when actual transfers occur.
 
 ### General
 
@@ -211,16 +218,18 @@ const balance = await client.query("/balance/0x123...");
 │  └──────┬───────┘    └──────────────┘    └──────────────┘    └────────────┘ │
 │         │ RPC:8545                                                           │
 │         ▼                                                                    │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                   │
-│  │  Scheduler   │    │ Event        │    │   Frontend   │                   │
-│  │   (Go)       │    │ Listener     │    │   (Vue.js)   │                   │
-│  │ ⏱️ 2min      │    │ (Rust)       │    │              │                   │
-│  └──────┬───────┘    └──────┬───────┘    └──────────────┘                   │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌────────────┐ │
+│  │  Scheduler   │    │ Event        │    │   Frontend   │    │    SDK      │ │
+│  │   (Go)       │    │ Listener     │    │   (Vue.js)   │    │ (TypeScript) │ │
+│  │ ⏱️ 30s       │    │ (Rust)       │    │              │    │ Trust        │ │
+│  │ + OpenCBDC   │    │              │    │              │    │ Majority     │ │
+│  └──────┬───────┘    └──────┬───────┘    └──────────────┘    └────────────┘ │
 │         │                   │                                                │
 │         ▼                   ▼                                                │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                   │
-│  │ Report TXT   │    │  PostgreSQL  │    │    Redis     │                   │
-│  │ 📄           │    │  💾          │    │    ⚡        │                   │
+│  │ Dual Reports │    │  PostgreSQL  │    │    Redis     │                   │
+│  │ 📄 TXT       │    │  💾          │    │    ⚡        │                   │
+│  │ 📄 OpenCBDC  │    │              │    │              │                   │
 │  └──────────────┘    └──────────────┘    └──────────────┘                   │
 │                                                                              │
 │  ┌──────────────┐                                                           │
@@ -229,4 +238,11 @@ const balance = await client.query("/balance/0x123...");
 │  └──────────────┘                                                           │
 │                                                                              │
 └─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Legend:**
+- **⏱️ 30s**: Scheduler runs every 30 seconds monitoring blockchain
+- **+ OpenCBDC**: Integrated CBDC transaction processing
+- **📄 TXT/OpenCBDC**: Dual logging system for blockchain and CBDC reports
+- **Trust Majority**: SDK consensus mechanism for multi-indexer validation
 ```
