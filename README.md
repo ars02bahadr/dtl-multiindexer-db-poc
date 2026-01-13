@@ -108,9 +108,25 @@ dtl-multiindexer-db-poc/
 └── 📄 docker-compose.yaml  # Orkestrasyon dosyası
 ```
 
-### 1. 🦀 Backend (Rust)
 
-Güvenlik ve perfromans için Rust dili kullanılmıştır. `Cargo workspace` özelliği ile birden fazla paket (crate) modüler olarak yönetilir.
+### 1. 🐍 Backend (Flask/Python)
+
+Modern, modüler ve Vue.js ile tam uyumlu yeni Flask backend:
+
+- **CORS desteği:** Frontend URL'i `.env` ile ayarlanır (`FRONTEND_URL`)
+- **Blueprint ile modüler yapı:** api, models, infra, utils klasörleri
+- **JWT auth, rol tabanlı erişim, event listener, IPFS, Redis, Postgres, Blockchain entegrasyonu**
+- **Vue.js ile doğrudan konuşur** (ör: http://localhost:5173)
+- **Başlatmak için:**
+  ```bash
+  cd backend
+  cp .env.example .env
+  pip install -r requirements.txt
+  flask db upgrade  # ilk migration
+  python app.py
+  ```
+
+Rust backend de workspace olarak kullanılabilir, ancak yeni Python backend Vue ile tam uyumludur.
 
 #### `backend/api` (REST API Sunucusu)
 

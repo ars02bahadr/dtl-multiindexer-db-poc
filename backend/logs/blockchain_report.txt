@@ -1,0 +1,30 @@
+[2026-01-13 22:00:31] === SCHEDULER STARTED ===
+[2026-01-13 22:00:31] Blockchain bağlantısı başarılı. Son blok: 9416
+[2026-01-13 22:02:10] === SCHEDULER STARTED ===
+[2026-01-13 22:02:10] Blockchain bağlantısı başarılı. Son blok: 9465
+[2026-01-13 22:02:40] --- 1 yeni işlem tespit edildi ---
+[2026-01-13 22:02:40] TX #2: Sender=1, Receiver=2, Amount=50.000000000000000000, Hash=N/A
+[2026-01-13 22:02:40]   OpenCBDC Response: success - cbdc_1768330960_local
+[2026-01-13 22:02:40]   Broadcast: 2/2 validators
+[2026-01-13 22:02:40] --- İşlemler tamamlandı ---
+
+[2026-01-13 22:05:18] === SCHEDULER STARTED ===
+[2026-01-13 22:05:18] Blockchain bağlantısı başarılı. Son blok: 9559
+[2026-01-13 22:05:48] --- 1 yeni işlem tespit edildi ---
+[2026-01-13 22:05:48] TX #3: Sender=3, Receiver=4, Amount=10.000000000000000000, Hash=N/A
+[2026-01-13 22:05:48]   OpenCBDC Response: success - cbdc_1768331148_local
+[2026-01-13 22:05:48]   Broadcast: 2/2 validators
+[2026-01-13 22:05:48] --- İşlemler tamamlandı ---
+
+[2026-01-13 22:09:10] ==================================================
+[2026-01-13 22:09:10] === SCHEDULER STARTED ===
+[2026-01-13 22:09:10] Blockchain bağlantısı: OK (Blok #9675)
+[2026-01-13 22:09:10] Validators: 4 adet
+[2026-01-13 22:09:10] OpenCBDC: MOCK MODE
+[2026-01-13 22:09:10] ==================================================
+[2026-01-13 22:11:37] ==================================================
+[2026-01-13 22:11:37] === SCHEDULER STARTED ===
+[2026-01-13 22:11:37] Blockchain bağlantısı: OK (Blok #9749)
+[2026-01-13 22:11:37] Validators: 4 adet
+[2026-01-13 22:11:37] OpenCBDC: MOCK MODE
+[2026-01-13 22:11:37] ==================================================

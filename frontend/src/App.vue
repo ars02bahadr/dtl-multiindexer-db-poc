@@ -1,15 +1,66 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
-const API_URL = 'http://localhost:3000'
+const API_URL = 'http://localhost:8000'
+
+// Validator endpoints (direkt blockchain'e bağlan)
+const VALIDATORS = [
+  { name: 'Validator 1', url: 'http://localhost:8545', id: 1 },
+  { name: 'Validator 2', url: 'http://localhost:8555', id: 2 },
+  { name: 'Validator 3', url: 'http://localhost:8565', id: 3 },
+  { name: 'Validator 4', url: 'http://localhost:8575', id: 4 },
+]
 
 const users = ref([])
+const nodes = ref({ nodes: [] })
+const transfers = ref([])
+const ledger = ref([])
+const transactions = ref([])
 const selectedFrom = ref('')
 const selectedTo = ref('')
-const amount = ref(500)
+const amount = ref(100)
 const status = ref('')
 const lastTx = ref(null)
+const activeValidator = ref(1)
+const validatorData = ref({})
+
+// Her validator için block number ve veri
+async function loadValidatorData() {
+  for (const v of VALIDATORS) {
+    try {
+      // Block number al
+      const resp = await fetch(v.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'eth_blockNumber',
+          params: [],
+          id: 1
+        })
+      })
+      const data = await resp.json()
+      const blockNum = data.result ? parseInt(data.result, 16) : null
+
+      validatorData.value[v.id] = {
+        name: v.name,
+        url: v.url,
+        online: true,
+        blockNumber: blockNum,
+        synced: true
+      }
+    } catch (e) {
+      validatorData.value[v.id] = {
+        name: v.name,
+        url: v.url,
+        online: false,
+        blockNumber: null,
+        synced: false
+      }
+    }
+  }
+}
 
 async function loadUsers() {
   try {
@@ -24,12 +75,48 @@ async function loadUsers() {
   }
 }
 
+async function loadNodes() {
+  try {
+    const res = await axios.get(`${API_URL}/nodes`)
+    nodes.value = res.data
+  } catch (e) {
+    console.error('Error loading nodes:', e)
+  }
+}
+
+async function loadTransactions() {
+  try {
+    const res = await axios.get(`${API_URL}/transactions`)
+    transactions.value = res.data
+  } catch (e) {
+    console.error('Error loading transactions:', e)
+  }
+}
+
+async function loadTransfers() {
+  try {
+    const res = await axios.get(`${API_URL}/nodes/transfers`)
+    transfers.value = res.data.transfers || []
+  } catch (e) {
+    console.error('Error loading transfers:', e)
+  }
+}
+
+async function loadLedger() {
+  try {
+    const res = await axios.get(`${API_URL}/nodes/ledger`)
+    ledger.value = res.data.ledger || []
+  } catch (e) {
+    console.error('Error loading ledger:', e)
+  }
+}
+
 async function seedUsers() {
   status.value = 'Seeding users...'
   try {
-    await axios.post(`${API_URL}/seed`)
+    await axios.post(`${API_URL}/health/seed`)
     await loadUsers()
-    status.value = 'Users seeded! Alice and Bob each have 1200 DTL'
+    status.value = 'Users seeded! Alice, Bob, Charlie and Admin created.'
   } catch (e) {
     status.value = 'Seed error: ' + e.message
   }
@@ -42,82 +129,191 @@ async function sendTransfer() {
   }
   status.value = 'Sending transfer...'
   try {
-    const res = await axios.post(`${API_URL}/transfer`, {
+    const res = await axios.post(`${API_URL}/transactions/transfer`, {
       from: selectedFrom.value,
       to: selectedTo.value,
       amount: Number(amount.value)
     })
     lastTx.value = res.data
-    status.value = `Transfer completed! IPFS CID: ${res.data.ipfs_cid || 'N/A'}`
+    status.value = `✅ Transfer completed! Tüm validator'lara sync edildi.`
     await loadUsers()
+    await loadTransactions()
+    // 3 saniye sonra logları güncelle
+    setTimeout(() => {
+      loadTransfers()
+      loadLedger()
+      loadValidatorData()
+    }, 3000)
   } catch (e) {
     status.value = 'Transfer error: ' + (e.response?.data?.error || e.message)
   }
 }
 
-onMounted(loadUsers)
+async function refreshAll() {
+  await Promise.all([
+    loadUsers(),
+    loadNodes(),
+    loadTransfers(),
+    loadLedger(),
+    loadTransactions(),
+    loadValidatorData()
+  ])
+  status.value = 'All data refreshed!'
+}
+
+// Seçili validator'ın durumu
+const currentValidator = computed(() => validatorData.value[activeValidator.value] || {})
+
+// Tüm validator'lar sync mi?
+const allSynced = computed(() => {
+  const blocks = Object.values(validatorData.value)
+    .filter(v => v.online)
+    .map(v => v.blockNumber)
+  return blocks.length > 0 && new Set(blocks).size === 1
+})
+
+onMounted(() => {
+  loadUsers()
+  loadNodes()
+  loadTransfers()
+  loadLedger()
+  loadTransactions()
+  loadValidatorData()
+  // Her 5 saniyede validator verilerini güncelle
+  setInterval(loadValidatorData, 5000)
+  setInterval(loadNodes, 10000)
+})
 </script>
 
 <template>
   <main>
     <div class="container">
-      <h1>🇹🇷 Digital Turkish Lira (DTL) PoC</h1>
+      <h1>🇹🇷 Digital Turkish Lira (DTL)</h1>
+      <p class="subtitle">Multi-Indexer & Decentralized Validation Demo</p>
 
       <div class="actions">
         <button @click="seedUsers" class="seed-btn">🌱 Seed Demo Users</button>
-        <button @click="loadUsers" class="refresh-btn">🔄 Refresh</button>
+        <button @click="refreshAll" class="refresh-btn">🔄 Refresh All</button>
       </div>
 
+      <!-- Validator Tab'ları -->
+      <div class="validator-tabs">
+        <button v-for="v in VALIDATORS" :key="v.id" @click="activeValidator = v.id"
+          :class="{ active: activeValidator === v.id, online: validatorData[v.id]?.online, offline: !validatorData[v.id]?.online }"
+          class="validator-tab">
+          <span class="status-dot">{{ validatorData[v.id]?.online ? '🟢' : '🔴' }}</span>
+          {{ v.name }}
+          <span class="block-num" v-if="validatorData[v.id]?.blockNumber">
+            #{{ validatorData[v.id].blockNumber }}
+          </span>
+        </button>
+      </div>
+
+      <!-- Sync Status -->
+      <div class="sync-banner" :class="{ synced: allSynced, 'not-synced': !allSynced }">
+        <span v-if="allSynced">✅ Tüm Validator'lar Senkronize - Merkezi Olmayan Veri Tutarlılığı Sağlandı (QBFT)</span>
+        <span v-else>⏳ Validator'lar senkronize ediliyor...</span>
+      </div>
+
+      <!-- Aktif Validator Bilgisi -->
+      <div class="active-validator-info">
+        <h2>📊 {{ currentValidator.name || 'Validator' }} - Veri Görünümü</h2>
+        <p class="validator-url">{{ currentValidator.url }}</p>
+      </div>
+
+      <!-- Kullanıcılar (Tüm validator'larda aynı) -->
       <div v-if="users.length" class="users-table">
-        <h2>Users</h2>
+        <h3>👥 Kullanıcılar & Bakiyeler</h3>
+        <p class="note">Bu veri tüm {{Object.values(validatorData).filter(v => v.online).length}} validator'da
+          aynıdır.</p>
         <table>
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Address</th>
-              <th>Balance</th>
+              <th>İsim</th>
+              <th>Adres</th>
+              <th>Bakiye</th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in users" :key="user.id">
-              <td>{{ user.name }}</td>
-              <td class="address">{{ user.address }}</td>
-              <td class="balance">{{ user.balance }} DTL</td>
+              <td>{{ user.username }}</td>
+              <td class="address">{{ user.address.slice(0, 10) }}...{{ user.address.slice(-6) }}</td>
+              <td class="balance">{{ parseFloat(user.balance).toFixed(2) }} DTL</td>
             </tr>
           </tbody>
         </table>
       </div>
 
+      <!-- Transfer Formu -->
       <div class="transfer-box">
-        <h2>Transfer Funds</h2>
+        <h3>💸 Transfer Yap</h3>
+        <p class="note">Transfer yapıldığında otomatik olarak tüm validator'lara broadcast edilir.</p>
         <div class="form-row">
-          <label>From:</label>
+          <label>Gönderen:</label>
           <select v-model="selectedFrom">
             <option v-for="user in users" :key="user.id" :value="user.address">
-              {{ user.name }} ({{ user.balance }} DTL)
+              {{ user.username }} ({{ parseFloat(user.balance).toFixed(2) }} DTL)
             </option>
           </select>
         </div>
         <div class="form-row">
-          <label>To:</label>
+          <label>Alıcı:</label>
           <select v-model="selectedTo">
             <option v-for="user in users" :key="user.id" :value="user.address">
-              {{ user.name }}
+              {{ user.username }}
             </option>
           </select>
         </div>
         <div class="form-row">
-          <label>Amount:</label>
-          <input v-model="amount" type="number" placeholder="Amount" />
+          <label>Miktar:</label>
+          <input v-model="amount" type="number" placeholder="Miktar (DTL)" />
         </div>
-        <button @click="sendTransfer" class="send-btn">💸 Send Transfer</button>
+        <button @click="sendTransfer" class="send-btn">💸 Transfer Gönder</button>
       </div>
 
+      <!-- Son İşlem -->
       <div v-if="lastTx" class="last-tx">
-        <h3>Last Transaction</h3>
-        <p><strong>ID:</strong> {{ lastTx.tx_id }}</p>
-        <p><strong>Status:</strong> {{ lastTx.status }}</p>
-        <p v-if="lastTx.ipfs_cid"><strong>IPFS CID:</strong> {{ lastTx.ipfs_cid }}</p>
+        <h3>✅ Son Transfer</h3>
+        <div class="tx-details">
+          <p><strong>TX ID:</strong> {{ lastTx.tx_id }}</p>
+          <p><strong>Miktar:</strong> {{ lastTx.amount }} DTL</p>
+          <p v-if="lastTx.ipfs_cid"><strong>IPFS CID:</strong> <span class="cid">{{ lastTx.ipfs_cid }}</span></p>
+        </div>
+        <div class="broadcast-info">
+          🔄 Bu işlem tüm validator node'lara broadcast edildi
+        </div>
+      </div>
+
+      <!-- İşlem Geçmişi -->
+      <div class="transactions-panel">
+        <h3>📜 İşlem Geçmişi (Tüm Validator'larda Mevcut)</h3>
+        <div class="transactions-list" v-if="transactions.length">
+          <div v-for="tx in transactions.slice(0, 10)" :key="tx.id" class="tx-item">
+            <span class="tx-id">#{{ tx.id }}</span>
+            <span class="tx-amount">{{ parseFloat(tx.amount).toFixed(2) }} DTL</span>
+            <span class="tx-status">{{ tx.status }}</span>
+            <span class="tx-ipfs" v-if="tx.ipfs_cid">IPFS ✓</span>
+          </div>
+        </div>
+        <p v-else class="no-data">Henüz işlem yok. Bir transfer yapın!</p>
+      </div>
+
+      <!-- Transfers & OpenCBDC Logları -->
+      <div class="logs-section">
+        <div class="log-panel">
+          <h4>📝 Transfer Logları</h4>
+          <div class="log-content">
+            <div v-for="(line, i) in transfers.slice(-10)" :key="i" class="log-line">{{ line }}</div>
+            <p v-if="!transfers.length" class="no-data">Henüz log yok</p>
+          </div>
+        </div>
+        <div class="log-panel">
+          <h4>💰 OpenCBDC Ledger</h4>
+          <div class="log-content">
+            <div v-for="(line, i) in ledger.slice(-10)" :key="i" class="log-line">{{ line }}</div>
+            <p v-if="!ledger.length" class="no-data">Henüz UTXO yok</p>
+          </div>
+        </div>
       </div>
 
       <p class="status">{{ status }}</p>
@@ -127,8 +323,8 @@ onMounted(loadUsers)
 
 <style scoped>
 .container {
-  max-width: 700px;
-  margin: 30px auto;
+  max-width: 1000px;
+  margin: 20px auto;
   padding: 25px;
   background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
   border-radius: 16px;
@@ -138,20 +334,27 @@ onMounted(loadUsers)
 
 h1 {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 5px;
   color: #00d9ff;
 }
 
-h2 {
+.subtitle {
+  text-align: center;
+  color: #888;
+  margin-bottom: 20px;
+  font-size: 14px;
+}
+
+h2,
+h3 {
   color: #00d9ff;
-  border-bottom: 1px solid #00d9ff33;
-  padding-bottom: 8px;
+  margin-top: 20px;
 }
 
 .actions {
   display: flex;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
 button {
@@ -174,15 +377,107 @@ button {
 }
 
 .send-btn {
-  background: #ff9800;
+  background: linear-gradient(135deg, #ff9800, #ff5722);
   color: white;
   width: 100%;
   margin-top: 10px;
+  font-size: 16px;
 }
 
 button:hover {
   transform: translateY(-2px);
   opacity: 0.9;
+}
+
+/* Validator Tabs */
+.validator-tabs {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.validator-tab {
+  flex: 1;
+  min-width: 120px;
+  padding: 12px 10px;
+  background: #1a1a2e;
+  color: #888;
+  border: 2px solid #333;
+  border-radius: 8px 8px 0 0;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.validator-tab.active {
+  background: #0d1b2a;
+  color: #00d9ff;
+  border-color: #00d9ff;
+  border-bottom: none;
+}
+
+.validator-tab.online {
+  border-top-color: #4caf50;
+}
+
+.validator-tab.offline {
+  border-top-color: #f44336;
+}
+
+.status-dot {
+  font-size: 10px;
+}
+
+.block-num {
+  font-size: 10px;
+  color: #666;
+}
+
+/* Sync Banner */
+.sync-banner {
+  padding: 10px;
+  border-radius: 0 0 8px 8px;
+  text-align: center;
+  font-weight: bold;
+  margin-bottom: 15px;
+}
+
+.sync-banner.synced {
+  background: #1b4332;
+  color: #4caf50;
+}
+
+.sync-banner.not-synced {
+  background: #4a1a1a;
+  color: #ff9800;
+}
+
+/* Active Validator Info */
+.active-validator-info {
+  background: #0d1b2a;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.active-validator-info h2 {
+  margin: 0 0 5px 0;
+  font-size: 16px;
+}
+
+.validator-url {
+  font-family: monospace;
+  font-size: 11px;
+  color: #666;
+  margin: 0;
+}
+
+/* Users Table */
+.users-table {
+  margin-bottom: 20px;
 }
 
 .users-table table {
@@ -200,11 +495,13 @@ button:hover {
 
 .users-table th {
   color: #00d9ff;
+  font-size: 12px;
 }
 
 .address {
   font-family: monospace;
-  font-size: 12px;
+  font-size: 11px;
+  color: #888;
 }
 
 .balance {
@@ -212,11 +509,18 @@ button:hover {
   font-weight: bold;
 }
 
+.note {
+  font-size: 11px;
+  color: #666;
+  margin: 5px 0;
+}
+
+/* Transfer Box */
 .transfer-box {
-  margin-top: 25px;
   padding: 20px;
   background: #0d1b2a;
   border-radius: 12px;
+  margin-bottom: 20px;
 }
 
 .form-row {
@@ -227,7 +531,8 @@ button:hover {
 }
 
 .form-row label {
-  width: 60px;
+  width: 80px;
+  font-size: 13px;
 }
 
 .form-row select,
@@ -240,23 +545,139 @@ button:hover {
   color: white;
 }
 
+/* Last TX */
 .last-tx {
-  margin-top: 20px;
   padding: 15px;
-  background: #0f3460;
+  background: linear-gradient(135deg, #0f3460, #1a1a2e);
   border-radius: 8px;
+  border-left: 4px solid #4caf50;
+  margin-bottom: 20px;
 }
 
 .last-tx h3 {
-  color: #00d9ff;
+  color: #4caf50;
+  margin: 0 0 10px 0;
+  font-size: 14px;
+}
+
+.tx-details {
   margin-bottom: 10px;
 }
 
+.tx-details p {
+  margin: 3px 0;
+  font-size: 12px;
+}
+
+.cid {
+  font-family: monospace;
+  font-size: 10px;
+  color: #00d9ff;
+}
+
+.broadcast-info {
+  font-size: 11px;
+  color: #4caf50;
+  background: #1b4332;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+/* Transactions Panel */
+.transactions-panel {
+  background: #0d1b2a;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.transactions-panel h3 {
+  margin: 0 0 10px 0;
+  font-size: 14px;
+}
+
+.transactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.tx-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 8px;
+  background: #1a1a2e;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.tx-id {
+  color: #888;
+}
+
+.tx-amount {
+  color: #4caf50;
+  font-weight: bold;
+}
+
+.tx-status {
+  color: #00d9ff;
+}
+
+.tx-ipfs {
+  font-size: 10px;
+  color: #9c27b0;
+}
+
+/* Logs Section */
+.logs-section {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.log-panel {
+  background: #0d1b2a;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.log-panel h4 {
+  color: #00d9ff;
+  margin: 0 0 10px 0;
+  font-size: 12px;
+}
+
+.log-content {
+  background: #000;
+  padding: 8px;
+  border-radius: 4px;
+  max-height: 120px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 10px;
+}
+
+.log-line {
+  padding: 2px 0;
+  color: #0f0;
+  border-bottom: 1px solid #111;
+}
+
+.no-data {
+  color: #666;
+  font-style: italic;
+  font-size: 11px;
+}
+
 .status {
-  margin-top: 20px;
+  margin-top: 15px;
   padding: 10px;
   background: #333;
   border-radius: 6px;
   text-align: center;
+  font-size: 13px;
 }
 </style>

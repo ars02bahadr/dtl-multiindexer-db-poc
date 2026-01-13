@@ -58,26 +58,21 @@ npx hardhat run scripts/deploy.ts --network besu
 
 _Note the deployed contract address from the output._
 
+
 ## 4. Run Backend Services
 
-Start the Actix-web API and Event Listener.
-
-### API (Terminal 1)
+### Flask/Python Backend (Recommended for Vue.js)
 
 ```bash
 cd backend
-# Set env vars if needed, defaults are set in code for localhost
-cargo run -p dtl-api
+cp .env.example .env
+pip install -r requirements.txt
+flask db upgrade
+python app.py
 ```
 
-_Server runs at http://localhost:8080_
+_Server runs at http://localhost:5000_
 
-### Event Listener (Terminal 2)
-
-```bash
-cd backend
-cargo run -p dtl-event-listener
-```
 
 ## 5. Run Frontend
 

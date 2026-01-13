@@ -73,8 +73,10 @@ services:
         "--config-file=/config/config.toml",
         "--genesis-file=/config/genesis.json",
         "--p2p-port=30303",
-        "--rpc-http-enabled=false",
-        "--rpc-ws-enabled=false",
+        "--rpc-http-enabled=true",
+        "--rpc-http-host=0.0.0.0",
+        "--rpc-http-port=8545",
+        "--rpc-http-cors-origins=*",
         "--min-gas-price=0",
       ]
     volumes:
@@ -83,6 +85,8 @@ services:
       - ./besu/static-nodes.json:/opt/besu/data/static-nodes.json
       - ./besu/keys/validator3/key:/opt/besu/data/key
       - besu-validator3-data:/opt/besu/data
+    ports:
+      - "8565:8545"
     networks:
       dtl-net:
         ipv4_address: 172.16.239.13
@@ -96,8 +100,10 @@ services:
         "--config-file=/config/config.toml",
         "--genesis-file=/config/genesis.json",
         "--p2p-port=30303",
-        "--rpc-http-enabled=false",
-        "--rpc-ws-enabled=false",
+        "--rpc-http-enabled=true",
+        "--rpc-http-host=0.0.0.0",
+        "--rpc-http-port=8545",
+        "--rpc-http-cors-origins=*",
         "--min-gas-price=0",
       ]
     volumes:
@@ -106,6 +112,8 @@ services:
       - ./besu/static-nodes.json:/opt/besu/data/static-nodes.json
       - ./besu/keys/validator4/key:/opt/besu/data/key
       - besu-validator4-data:/opt/besu/data
+    ports:
+      - "8575:8545"
     networks:
       dtl-net:
         ipv4_address: 172.16.239.14
