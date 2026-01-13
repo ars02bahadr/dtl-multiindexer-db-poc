@@ -1,9 +1,0 @@
-[workspace]
-members = [
-    "api",
-    "domain",
-    "infra",
-    "event-listener"
-]
-
-resolver = "2"

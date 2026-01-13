@@ -38,3 +38,13 @@ target/
 # Project Specific
 # Explicitly ignore backend target if not covered by general rule (though it should be)
 backend/target/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+python-backend/*.log
+python-backend/.mypy_cache/
+python-backend/.pytest_cache/
+python-backend/.coverage
+python-backend/htmlcov/
