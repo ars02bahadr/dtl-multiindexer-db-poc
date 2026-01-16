@@ -169,24 +169,6 @@ services:
     networks:
       dtl-net:
 
-  # --- Scheduler (Go - Hangfire-like) ---
-  scheduler:
-    build:
-      context: ../scheduler
-      dockerfile: Dockerfile
-    container_name: dtl-scheduler
-    environment:
-      - BESU_RPC_URL=http://dtl-validator1:8545
-      - SCHEDULER_INTERVAL=30s
-      - LOG_FILE=/app/logs/blockchain_report.txt
-      - OPENCBDC_URL=mock
-    volumes:
-      - ../scheduler/logs:/app/logs
-    depends_on:
-      - validator1
-    restart: unless-stopped
-    networks:
-      dtl-net:
 
 networks:
   dtl-net:

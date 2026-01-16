@@ -48,3 +48,4 @@ python-backend/.mypy_cache/
 python-backend/.pytest_cache/
 python-backend/.coverage
 python-backend/htmlcov/
+backend/.env

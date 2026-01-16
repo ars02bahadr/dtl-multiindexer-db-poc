@@ -669,10 +669,12 @@ def init_swagger(app):
                 'transfers.txt'
             )
 
+            print(transfers_file)
+
             if not os.path.exists(transfers_file):
                 return {"transfers": [], "message": "Henüz transfer yok"}
 
-            with open(transfers_file, 'r') as f:
+            with open(transfers_file, 'r', encoding='cp1254', errors='replace') as f:
                 lines = f.readlines()
 
             return {"transfers": lines[-30:], "total": len(lines)}
