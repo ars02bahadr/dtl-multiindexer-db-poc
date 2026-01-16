@@ -18,26 +18,11 @@ class Config:
     FLASK_ENV = os.getenv('FLASK_ENV', 'production')
     DEBUG = FLASK_ENV == 'development'
 
-    # JWT
+    # JWT (Wallet-based auth için)
     JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'jwt-secret-key-change-in-production')
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=int(os.getenv('JWT_EXPIRY_HOURS', 24)))
-    JWT_TOKEN_LOCATION = ['headers']
-    JWT_HEADER_NAME = 'Authorization'
-    JWT_HEADER_TYPE = 'Bearer'
 
-    # Database (PostgreSQL)
-    SQLALCHEMY_DATABASE_URI = os.getenv(
-        'DATABASE_URL',
-        'postgresql://postgres:postgres@localhost:5432/dtl'
-    )
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ENGINE_OPTIONS = {
-        'pool_pre_ping': True,
-        'pool_size': 10,
-        'max_overflow': 20,
-    }
-
-    # Redis
+    # Redis (cache için)
     REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
     CACHE_TTL = int(os.getenv('CACHE_TTL', 300))  # 5 dakika default
 
@@ -47,6 +32,17 @@ class Config:
     # Blockchain (Besu/ETH)
     BLOCKCHAIN_RPC_URL = os.getenv('BLOCKCHAIN_RPC_URL', 'http://localhost:8545')
     MONEY_TOKEN_ADDRESS = os.getenv('MONEY_TOKEN_ADDRESS', '')  # DTL token contract
+
+    # Blockchain Private Keys (Development only - Besu genesis alloc keys)
+    # WARNING: Never use these in production!
+    DEPLOYER_PRIVATE_KEY = os.getenv(
+        'DEPLOYER_PRIVATE_KEY',
+        '0x8f2a55949038a9610f50fb23b5883af3b4ecb3c3bb792cbcefbd1542c691be68'
+    )
+    DEPLOYER_ADDRESS = os.getenv(
+        'DEPLOYER_ADDRESS',
+        '0xfe3b557e8fb62b89f4916b721be55ceb828dbd73'
+    )
 
     # Event Listener
     EVENT_LISTENER_INTERVAL = int(os.getenv('EVENT_LISTENER_INTERVAL', 30))  # saniye

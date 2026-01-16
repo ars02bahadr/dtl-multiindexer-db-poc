@@ -1,82 +1,95 @@
-# Digital Turkish Lira (DTL) - Project Verification Walkthrough
+# DTL Multi-Indexer - Kullanım Kılavuzu
 
-This document provides the step-by-step commands to run the DTL ecosystem.
+Bu belge projenin adım adım nasıl çalıştırılacağını ve test edileceğini açıklar.
 
-## 1. Prerequisites
+## Hızlı Başlangıç
 
-Ensure you have the following installed:
-
-- Docker & Docker Compose
-- Rust (stable)
-- Node.js (LTS) & pnpm/npm
-- Go 1.21+ (optional, for local scheduler development)
-
-## 2. Start Infrastructure (Besu, IPFS, Databases, Scheduler)
-
-Start the blockchain network, databases, and monitoring services.
+### Terminal 1: Backend
 
 ```bash
-# From infra directory
-cd infra
-docker compose up -d
-
-# Verify all containers are running
-docker ps --format "table {{.Names}}\t{{.Status}}"
-```
-
-**Expected containers:**
-- `dtl-validator1` through `dtl-validator4` - Besu QBFT validators
-- `dtl-ipfs` - IPFS node for decentralized storage
-- `dtl-db` - PostgreSQL database
-- `dtl-redis` - Redis cache
-- `dtl-scheduler` - Go-based blockchain monitor
-
-### Verify Blockchain Health
-
-```bash
-# Check validator1 is producing blocks
-curl -s -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'
-
-# Check peer connections (should be 3)
-curl -s -X POST http://localhost:8545 \
-  -H "Content-Type: application/json" \
-  -d '{"jsonrpc":"2.0","method":"net_peerCount","params":[],"id":1}'
-```
-
-## 3. Deploy Smart Contracts
-
-Deploy the `MoneyToken` to the local Besu network.
-
-```bash
-cd blockchain
-npm install
-# Deploy to local Besu network (ensure localhost:8545 is reachable)
-npx hardhat run scripts/deploy.ts --network besu
-```
-
-_Note the deployed contract address from the output._
-
-
-## 4. Run Backend Services
-
-### Flask/Python Backend (Recommended for Vue.js)
-
-```bash
-cd backend
-cp .env.example .env
-pip install -r requirements.txt
-flask db upgrade
+cd /Users/admin/Desktop/DTL/dtl-multiindexer-db-poc/backend
 python app.py
 ```
 
-_Server runs at http://localhost:5000_
+### Terminal 2: Frontend
 
+```bash
+cd /Users/admin/Desktop/DTL/dtl-multiindexer-db-poc/frontend
+npm install   # Sadece ilk sefer
+npm run dev
+```
 
-## 5. Run Frontend
+### Erişim Linkleri
 
-Start the Vue.js Wallet application.
+| Servis | URL |
+|--------|-----|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8000 |
+| Swagger UI | http://localhost:8000/swagger/ |
+
+---
+
+## 1. Kurulum (Detaylı)
+
+### 1.1 Gereksinimler
+
+```bash
+# Python versiyonu kontrol (3.9+ gerekli)
+python --version
+
+# Node.js versiyonu kontrol (18+ önerilir)
+node --version
+
+# Docker versiyonu kontrol (blockchain için)
+docker --version
+```
+
+### 1.2 Blockchain Ağını Başlat (Opsiyonel)
+
+Eğer gerçek blockchain bağlantısı istiyorsan:
+
+```bash
+cd infra
+docker compose up -d
+
+# Durumu kontrol et
+docker ps
+```
+
+**Not:** Blockchain olmadan da çalışır - transfer'ler mock tx_hash ile yapılır.
+
+### 1.3 Backend Kurulumu
+
+```bash
+cd backend
+
+# Virtual environment (önerilir)
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Bağımlılıkları yükle
+pip install -r requirements.txt
+
+# Başlat
+python app.py
+```
+
+**Başarılı çıktı:**
+```
+╔══════════════════════════════════════════════════════════╗
+║        DTL Multi-Indexer - OpenCBDC Mode                 ║
+╠══════════════════════════════════════════════════════════╣
+║  🔗 Storage: OpenCBDC UTXO Ledger (JSON)                 ║
+║  🔐 Auth: Wallet Signature Verification                  ║
+║  📊 Swagger: http://localhost:8000/swagger/              ║
+║  ❌ PostgreSQL: NOT USED                                 ║
+╚══════════════════════════════════════════════════════════╝
+ * Running on http://0.0.0.0:8000
+```
+
+### 1.4 Frontend Kurulumu
+
+**Yeni terminal aç:**
 
 ```bash
 cd frontend
@@ -84,160 +97,335 @@ npm install
 npm run dev
 ```
 
-_Access at http://localhost:5173_ (or port shown).
+**Çıktı:**
+```
+  VITE v5.x.x  ready in xxx ms
 
-## 6. Monitor Blockchain with Scheduler
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+```
 
-The Go scheduler automatically monitors the blockchain every **30 seconds** and logs reports. It also integrates with **OpenCBDC** to automatically process DTL transfers as CBDC transactions.
+---
 
-### View Scheduler Logs
+## 2. API ile Test (curl/Swagger)
+
+### 2.1 Swagger UI
+
+Tarayıcıda aç: **http://localhost:8000/swagger/**
+
+Tüm endpoint'leri görsel olarak test edebilirsin.
+
+### 2.2 Demo Hesapları Oluştur
 
 ```bash
-# Real-time Docker logs
-docker logs -f dtl-scheduler
-
-# Or view the report files
-tail -f scheduler/logs/blockchain_report.txt
-tail -f scheduler/logs/opencbdc_report.txt
+curl -X POST http://localhost:8000/health/seed
 ```
 
-### Scheduler Output Example
-
-```
-2026/01/06 20:50:25 ========== Running scheduled job ==========
-2026/01/06 20:50:25 📦 Current block number: 5930
-2026/01/06 20:50:25 💸 Found 1 transactions in last 30 blocks
-2026/01/06 20:50:25 📡 [Mock] Transaction Broadcasted internally:
-2026/01/06 20:50:25    Inputs: 1, Outputs: 2
-2026/01/06 20:50:25    Memo/Data: IPFS:TODO_EXTRACT_FROM_LOGS
-2026/01/06 20:50:25    💸 OpenCBDC Payment Logged | 0xa197...5585 -> 0x6273...ef57 : 200 DTL (30ms)
-2026/01/06 20:50:25    📝 Logged: 0xa197...5585 -> 0x6273...ef57 : 200 DTL
-2026/01/06 20:50:25 ✅ Job completed in 31.038375ms
-```
-
-### Configure Scheduler Interval
-
-Edit `infra/compose.yaml` to change the interval:
-
-```yaml
-scheduler:
-  environment:
-    - SCHEDULER_INTERVAL=30s  # Options: 10s, 30s, 1m, 2m, 5m, etc.
+**Beklenen çıktı:**
+```json
+{
+  "status": "seeded",
+  "created": [
+    {"address": "0x1111111111111111111111111111111111111111", "balance": 1000},
+    {"address": "0x2222222222222222222222222222222222222222", "balance": 500},
+    {"address": "0x3333333333333333333333333333333333333333", "balance": 250},
+    {"address": "0x0000000000000000000000000000000000000001", "balance": 10000}
+  ]
+}
 ```
 
-Then restart: `docker compose up -d scheduler`
+### 2.3 Hesapları Listele
 
-### Scheduler Features
-
-- **Blockchain Monitoring:** Checks last 30 blocks for ERC20 transfers
-- **OpenCBDC Integration:** Automatically processes DTL transfers as CBDC transactions
-- **Smart Logging:** Only writes to files when actual transfers occur
-- **Dual Log Files:**
-  - `blockchain_report.txt`: Transfer summary lines
-  - `opencbdc_report.txt`: Detailed CBDC transaction reports
-
-## 7. End-to-End Test Scenarios
-
-### Scenario A: Wallet Connection
-
-1. Open Frontend.
-2. Click "Connect Wallet".
-3. Approve MetaMask connection (ensure MetaMask is connected to Localhost 8545 with Chain ID 1337).
-4. **Verify**: Address and Balance (initially high if using genesis account) are displayed.
-
-### Scenario B: Transfer with Scheduler Monitoring
-
-1. Enter recipient address (e.g., `0x627306090abab3a6e1400e9345bc60c78a8bef57`).
-2. Enter amount (e.g., 500).
-3. Click Send.
-4. **Verify**:
-   - Backend logs show "submitted".
-   - Toast/Status in UI says "Tx Hash: ...".
-   - Besu logs (`docker logs dtl-validator1`) show transaction processing.
-   - **Scheduler logs** show the transfer within 30 seconds (only when transfers occur):
-     ```
-     2024/01/15 10:30:15 Processing DTL transfer: 0xa197...5585 -> 0x6273...ef57, amount: 500
-     2024/01/15 10:30:15 OpenCBDC transaction submitted successfully: tx_hash_123
-     ```
-
-### Scenario C: SDK Consensus (Code Check)
-
-The SDK located in `sdk/src/index.ts` implements the "Trust Majority" logic.
-
-```typescript
-// Pseudocode usage
-const client = new MultiIndexerClient([
-  "http://indexer1/api",
-  "http://indexer2/api",
-  "http://indexer3/api",
-]);
-const balance = await client.query("/balance/0x123...");
+```bash
+curl http://localhost:8000/accounts
 ```
 
-## 8. Troubleshooting
+### 2.4 Transfer Yap
 
-### Besu Issues
-
-- **Validators not starting**: Check genesis.json extraData is properly RLP-encoded with 4 validator addresses.
-- **No peers**: Verify static-nodes.json has correct enode URLs with public keys.
-- **RPC 403 Forbidden**: Ensure `--host-allowlist=*` is set in validator1 command.
-
-### Scheduler Issues
-
-- **"Error getting block number"**: Validator might not be ready. Wait a few seconds and restart scheduler.
-- **Transfers not showing**: Scheduler runs every 30 seconds and checks the last 30 blocks for new transfers. If no transfers occurred recently, no logs will appear (this is normal behavior).
-- **OpenCBDC connection failed**: Ensure `OPENCBDC_URL=mock` in compose.yaml for development, or provide valid OpenCBDC API URL.
-- **No log files created**: This is normal - logs are only written when actual transfers occur.
-
-### General
-
-- **Besu Peering**: `docker logs dtl-validator1` to see if peers are connected.
-- **CORS**: If Frontend can't talk to Besu, check `rpc-http-cors-origins=["*"]` in config.toml.
-- **Reset Everything**:
-  ```bash
-  cd infra
-  docker compose down -v
-  docker compose up -d
-  ```
-
-## 9. Architecture Summary
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           DTL Ecosystem                                      │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                              │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌────────────┐ │
-│  │  Validator1  │◄──►│  Validator2  │◄──►│  Validator3  │◄──►│ Validator4 │ │
-│  │   (Besu)     │    │   (Besu)     │    │   (Besu)     │    │  (Besu)    │ │
-│  └──────┬───────┘    └──────────────┘    └──────────────┘    └────────────┘ │
-│         │ RPC:8545                                                           │
-│         ▼                                                                    │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐    ┌────────────┐ │
-│  │  Scheduler   │    │ Event        │    │   Frontend   │    │    SDK      │ │
-│  │   (Go)       │    │ Listener     │    │   (Vue.js)   │    │ (TypeScript) │ │
-│  │ ⏱️ 30s       │    │ (Rust)       │    │              │    │ Trust        │ │
-│  │ + OpenCBDC   │    │              │    │              │    │ Majority     │ │
-│  └──────┬───────┘    └──────┬───────┘    └──────────────┘    └────────────┘ │
-│         │                   │                                                │
-│         ▼                   ▼                                                │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐                   │
-│  │ Dual Reports │    │  PostgreSQL  │    │    Redis     │                   │
-│  │ 📄 TXT       │    │  💾          │    │    ⚡        │                   │
-│  │ 📄 OpenCBDC  │    │              │    │              │                   │
-│  └──────────────┘    └──────────────┘    └──────────────┘                   │
-│                                                                              │
-│  ┌──────────────┐                                                           │
-│  │    IPFS      │  Decentralized Storage                                    │
-│  │    📦        │                                                           │
-│  └──────────────┘                                                           │
-│                                                                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```bash
+curl -X POST http://localhost:8000/transactions/transfer \
+  -H "Content-Type: application/json" \
+  -d '{
+    "from": "0x1111111111111111111111111111111111111111",
+    "to": "0x2222222222222222222222222222222222222222",
+    "amount": 100,
+    "validator": "validator1"
+  }'
 ```
 
-**Legend:**
-- **⏱️ 30s**: Scheduler runs every 30 seconds monitoring blockchain
-- **+ OpenCBDC**: Integrated CBDC transaction processing
-- **📄 TXT/OpenCBDC**: Dual logging system for blockchain and CBDC reports
-- **Trust Majority**: SDK consensus mechanism for multi-indexer validation
+**Beklenen çıktı:**
+```json
+{
+  "status": "success",
+  "tx_id": 1,
+  "utxo_id": "utxo_abc123...",
+  "sender": "0x1111111111111111111111111111111111111111",
+  "receiver": "0x2222222222222222222222222222222222222222",
+  "amount": "100",
+  "sender_new_balance": "900",
+  "receiver_new_balance": "600",
+  "tx_hash": "0x...",
+  "ipfs_cid": "Qm...",
+  "block_number": 12345,
+  "validator": "validator1",
+  "message": "Transfer tamamlandı. Blockchain + IPFS + OpenCBDC kaydedildi."
+}
 ```
+
+### 2.5 Validator Loglarını Kontrol Et
+
+```bash
+# Tek validator logu
+curl http://localhost:8000/nodes/validator-logs/validator1
+
+# Tüm validator logları özeti
+curl http://localhost:8000/nodes/validator-logs
+```
+
+### 2.6 Transfer Loglarını Gör
+
+```bash
+curl http://localhost:8000/nodes/transfers
+```
+
+### 2.7 OpenCBDC Ledger Loglarını Gör
+
+```bash
+curl http://localhost:8000/nodes/ledger
+```
+
+### 2.8 Sistem Durumu
+
+```bash
+curl http://localhost:8000/health
+```
+
+---
+
+## 3. Frontend ile Test
+
+### 3.1 Frontend'i Aç
+
+Tarayıcıda: **http://localhost:5173**
+
+### 3.2 Demo Kullanıcıları Oluştur
+
+1. "🌱 Seed Demo Users" butonuna tıkla
+2. Alice, Bob, Charlie ve Admin hesapları oluşturulacak
+
+### 3.3 Transfer Yap
+
+1. **Validator seç:** Dropdown'dan validator1-4 arasından seç
+2. **Gönderen seç:** Dropdown'dan hesap seç
+3. **Alıcı seç:** Dropdown'dan hedef hesap seç
+4. **Miktar gir:** Transfer miktarı
+5. **"💸 Transfer Gönder" butonuna tıkla**
+
+### 3.4 Sonuçları Gör
+
+Transfer sonrası:
+
+- **Son Transfer paneli:** TX Hash, Block Number, IPFS CID, Validator bilgisi
+- **Kullanıcılar tablosu:** Güncellenen bakiyeler
+- **Validator Logları:** 4 validator'ın her birinde transfer logu
+- **İşlem Geçmişi:** Tüm transfer'lerin listesi
+
+### 3.5 Validator Sekmelerini Kullan
+
+- Üstteki validator tab'larına tıklayarak her validator'ın durumunu gör
+- 🟢 Online / 🔴 Offline durumu
+- Block number'ları karşılaştır (sync durumu)
+
+---
+
+## 4. Log Dosyaları
+
+### 4.1 Log Dosyaları Nerede?
+
+```
+backend/logs/
+├── transfers.txt           # Genel transfer özeti
+├── opencbdc_ledger.txt     # UTXO kayıtları
+├── dtl-validator-1.txt     # Validator 1 detaylı log
+├── dtl-validator-2.txt     # Validator 2 detaylı log
+├── dtl-validator-3.txt     # Validator 3 detaylı log
+└── dtl-validator-4.txt     # Validator 4 detaylı log
+```
+
+### 4.2 Log Dosyalarını İzle (Terminal)
+
+```bash
+# Validator 1 loglarını canlı izle
+tail -f backend/logs/dtl-validator-1.txt
+
+# Transfer loglarını izle
+tail -f backend/logs/transfers.txt
+
+# Tüm validator loglarını aynı anda izle
+tail -f backend/logs/dtl-validator-*.txt
+```
+
+### 4.3 Log Formatları
+
+**transfers.txt:**
+```
+[2026-01-17 01:14:49] 0x00000000... -> 0x33333333...: 350 DTL (utxo: utxo_75ca29aa8a7)
+```
+
+**opencbdc_ledger.txt:**
+```
+[2026-01-16T22:14:49.290044] UTXO: utxo_75ca29aa8a78cc73 | 0x00000000... -> 0x33333333... | 350 DTL
+```
+
+**dtl-validator-X.txt:**
+```
+[2026-01-17 01:14:49.291] [INFO] >>> OUTGOING TRANSFER (from this node)
+[2026-01-17 01:14:49.291] [INFO]   tx_hash: 0x20260116221449...
+[2026-01-17 01:14:49.291] [INFO]   from: 0x00000000...
+[2026-01-17 01:14:49.291] [INFO]   to: 0x33333333...
+[2026-01-17 01:14:49.291] [INFO]   amount: 350 DTL
+[2026-01-17 01:14:49.291] [INFO]   ipfs_cid: QmXgkqopQcTEutDgmxNJuPk6q6ubWetXVYH1QXKwRAN4qN
+[2026-01-17 01:14:49.291] [INFO]   status: CONFIRMED
+```
+
+### 4.4 Log Amaçları
+
+| Log Dosyası | Amaç | Ne Zaman Yazılır |
+|-------------|------|------------------|
+| `transfers.txt` | Transfer özeti, scheduler tarafından | Her transfer + scheduler başlangıcı |
+| `opencbdc_ledger.txt` | UTXO kayıtları | Her yeni UTXO oluşturulduğunda |
+| `dtl-validator-X.txt` | Detaylı validator logları | Her transfer'de 4'üne de yazılır |
+
+---
+
+## 5. Örnek Senaryolar
+
+### Senaryo A: Basit Transfer
+
+```bash
+# 1. Seed users
+curl -X POST http://localhost:8000/health/seed
+
+# 2. Alice'den Bob'a 100 DTL transfer
+curl -X POST http://localhost:8000/transactions/transfer \
+  -H "Content-Type: application/json" \
+  -d '{"from": "0x1111111111111111111111111111111111111111", "to": "0x2222222222222222222222222222222222222222", "amount": 100, "validator": "validator1"}'
+
+# 3. Bakiyeleri kontrol et
+curl http://localhost:8000/accounts/0x1111111111111111111111111111111111111111/balance
+curl http://localhost:8000/accounts/0x2222222222222222222222222222222222222222/balance
+```
+
+### Senaryo B: Farklı Validator'lardan Transfer
+
+```bash
+# Validator 2 üzerinden transfer
+curl -X POST http://localhost:8000/transactions/transfer \
+  -H "Content-Type: application/json" \
+  -d '{"from": "0x2222222222222222222222222222222222222222", "to": "0x3333333333333333333333333333333333333333", "amount": 50, "validator": "validator2"}'
+
+# Validator 3 üzerinden transfer
+curl -X POST http://localhost:8000/transactions/transfer \
+  -H "Content-Type: application/json" \
+  -d '{"from": "0x3333333333333333333333333333333333333333", "to": "0x1111111111111111111111111111111111111111", "amount": 25, "validator": "validator3"}'
+```
+
+### Senaryo C: Tüm Logları Karşılaştır
+
+```bash
+# Her validator'ın logunu göster (hepsi aynı transfer'i görmeli)
+echo "=== Validator 1 ===" && curl -s http://localhost:8000/nodes/validator-logs/validator1 | jq '.logs[-5:]'
+echo "=== Validator 2 ===" && curl -s http://localhost:8000/nodes/validator-logs/validator2 | jq '.logs[-5:]'
+echo "=== Validator 3 ===" && curl -s http://localhost:8000/nodes/validator-logs/validator3 | jq '.logs[-5:]'
+echo "=== Validator 4 ===" && curl -s http://localhost:8000/nodes/validator-logs/validator4 | jq '.logs[-5:]'
+```
+
+---
+
+## 6. Troubleshooting
+
+### Backend başlamıyor
+
+```bash
+# Port kullanımda mı?
+lsof -i :8000
+
+# Önceki process'i öldür
+pkill -f "python app.py"
+```
+
+### Frontend backend'e bağlanamıyor
+
+1. Backend çalışıyor mu kontrol et: `curl http://localhost:8000/health`
+2. CORS hatası varsa backend'i yeniden başlat
+3. Tarayıcı konsolunda hata mesajını kontrol et (F12)
+
+### Loglar görünmüyor
+
+1. Önce transfer yap - loglar transfer sonrası oluşur
+2. Log dizininin var olduğunu kontrol et: `ls -la backend/logs/`
+3. Backend'i yeniden başlat
+
+### Validator'lar offline görünüyor
+
+1. Docker çalışıyor mu: `docker ps`
+2. Blockchain ağını başlat: `cd infra && docker compose up -d`
+3. Validator port'larını kontrol et: `curl http://localhost:8545`
+
+---
+
+## 7. Faydalı Komutlar
+
+```bash
+# Backend'i arka planda başlat
+cd backend && python app.py &
+
+# Frontend'i arka planda başlat
+cd frontend && npm run dev &
+
+# Tüm logları temizle
+rm -f backend/logs/*.txt
+
+# Ledger verisini sıfırla
+rm -f backend/data/opencbdc_ledger.json
+
+# Her şeyi yeniden başlat
+pkill -f "python app.py"
+pkill -f "npm run dev"
+cd backend && python app.py &
+cd frontend && npm run dev &
+```
+
+---
+
+## 8. Mimari Özet
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      TRANSFER AKIŞI                          │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│   Frontend (Vue.js)                                          │
+│        │                                                     │
+│        ▼  POST /transactions/transfer                        │
+│   ┌─────────────────────────────────────────────────┐       │
+│   │              Flask Backend                       │       │
+│   │                                                  │       │
+│   │  1. Bakiye kontrolü (OpenCBDC JSON Ledger)      │       │
+│   │  2. Blockchain'e yaz (Besu) → tx_hash           │       │
+│   │  3. IPFS'e metadata → ipfs_cid                  │       │
+│   │  4. UTXO oluştur (OpenCBDC)                     │       │
+│   │  5. 4 validator loguna yaz                      │       │
+│   │                                                  │       │
+│   └─────────────────────────────────────────────────┘       │
+│        │                                                     │
+│        ▼                                                     │
+│   ┌─────────────┬─────────────┬─────────────┬─────────────┐ │
+│   │ Validator 1 │ Validator 2 │ Validator 3 │ Validator 4 │ │
+│   │    .txt     │    .txt     │    .txt     │    .txt     │ │
+│   └─────────────┴─────────────┴─────────────┴─────────────┘ │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Tüm validator'lar aynı transaction'ı görür = Merkezi Olmayan Doğrulama**

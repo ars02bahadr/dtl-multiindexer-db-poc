@@ -1,17 +1,9 @@
 """
-Shared Flask extensions to avoid circular imports.
-Tüm extension'lar burada başlatılır ve diğer modüllerden import edilir.
+Shared Flask extensions - OpenCBDC Mode.
+PostgreSQL/SQLAlchemy KULLANILMIYOR.
 """
-from flask_jwt_extended import JWTManager
-from flask_sqlalchemy import SQLAlchemy
 
-# Database instance
-db = SQLAlchemy()
-
-# JWT Manager instance
-jwt = JWTManager()
-
-# Redis client (lazy initialization)
+# Redis client (lazy initialization, opsiyonel cache)
 redis_client = None
 
 
