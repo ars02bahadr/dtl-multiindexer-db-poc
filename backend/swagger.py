@@ -9,6 +9,7 @@ from flask import request, g
 from flask_restx import Api, Resource, Namespace, fields
 from decimal import Decimal
 import json
+from backend.infra.wallet_auth import wallet_required
 
 api = None
 
@@ -49,6 +50,7 @@ def init_swagger(app):
     ledger_ns = Namespace('ledger', description='OpenCBDC Ledger')
     health_ns = Namespace('health', description='Sistem durumu')
     nodes_ns = Namespace('nodes', description='Multi-Indexer Node Verileri')
+    templates_ns = Namespace('templates', description='İşlem Şablonları (IPFS-backed)')
 
     api.add_namespace(auth_ns, path='/auth')
     api.add_namespace(accounts_ns, path='/accounts')
@@ -56,6 +58,7 @@ def init_swagger(app):
     api.add_namespace(ledger_ns, path='/ledger')
     api.add_namespace(health_ns, path='/health')
     api.add_namespace(nodes_ns, path='/nodes')
+    api.add_namespace(templates_ns, path='/templates')
 
     # Models
     account_model = accounts_ns.model('Account', {
@@ -67,10 +70,38 @@ def init_swagger(app):
 
     transfer_model = transactions_ns.model('TransferRequest', {
         'from': fields.String(required=True, description='Gönderen adresi'),
-        'to': fields.String(required=True, description='Alıcı adresi'),
-        'amount': fields.Float(required=True, description='Miktar'),
+        'to': fields.String(description='Alıcı adresi (template yoksa zorunlu)'),
+        'amount': fields.Float(description='Miktar (template yoksa zorunlu)'),
+        'template_id': fields.String(description='Şablon ID (varsa to/amount buradan alınır)'),
         'validator': fields.String(description='Hangi validator üzerinden işlem yapılacak (validator1-4)'),
         'metadata': fields.Raw(description='IPFS metadata (opsiyonel)')
+    })
+
+    template_input_model = templates_ns.model('TemplateInput', {
+        'template_name': fields.String(required=True, description='Şablon adı'),
+        'payee_name': fields.String(description='Alıcı adı'),
+        'payee_account': fields.String(required=True, description='Alıcı cüzdan adresi'),
+        'default_amount': fields.Float(description='Varsayılan tutar'),
+        'planned_date': fields.String(description='Planlanan tarih (YYYY-MM-DD)'),
+        'description': fields.String(description='Açıklama'),
+        'tags': fields.List(fields.String, description='Etiketler')
+    })
+    
+    template_model = templates_ns.model('Template', {
+        'template_id': fields.String(),
+        'owner': fields.String(),
+        'template_name': fields.String(),
+        'payee_name': fields.String(),
+        'payee_account': fields.String(),
+        'default_amount': fields.Float(),
+        'planned_date': fields.String(),
+        'description': fields.String(),
+        'tags': fields.List(fields.String),
+        'cid': fields.String(),
+        'status': fields.String(),
+        'pending_ipfs': fields.Boolean(),
+        'created_at': fields.String(),
+        'updated_at': fields.String()
     })
 
     challenge_model = auth_ns.model('ChallengeResponse', {
@@ -265,11 +296,44 @@ def init_swagger(app):
             from_address = payload.get("from", "").strip().lower()
             to_address = payload.get("to", "").strip().lower()
             amount_val = payload.get("amount")
+            template_id = payload.get("template_id")
             metadata = payload.get("metadata")
             source_validator = payload.get("validator", "validator1")
 
-            if not from_address or not to_address or amount_val is None:
-                return {"error": "from, to ve amount gerekli"}, 400
+            if not from_address:
+                return {"error": "from adresi zorunlu"}, 400
+
+            # Template logic
+            template_data = {}
+            template_snapshot_cid = None
+            if template_id:
+                tpl = OpenCBDCLedger.get_template(template_id)
+                if not tpl:
+                    return {"error": "template not found"}, 404
+                
+                # Template'den verileri al
+                if not to_address:
+                    to_address = tpl.get("payee_account", "").lower()
+                if amount_val is None:
+                    amount_val = tpl.get("default_amount")
+                
+                # Snapshot al (Template JSON'u tekrar IPFS'e yaz)
+                try:
+                    from backend.infra.ipfs_client import IPFSClient
+                    ipfs = IPFSClient()
+                    # Snapshot için sadece gerekli veriyi al
+                    snapshot_data = {k: v for k, v in tpl.items() if k not in ['_backup_data']}
+                    snapshot_data["snapshot_at"] = datetime.utcnow().isoformat()
+                    template_snapshot_cid = ipfs.add_json(snapshot_data)
+                except:
+                    pass
+            
+            # Validation
+            if not to_address:
+                return {"error": "to adresi (veya template'de tanımlı alıcı) zorunlu"}, 400
+            
+            if amount_val is None:
+                return {"error": "amount (veya template'de tanımlı tutar) zorunlu"}, 400
 
             try:
                 amount = Decimal(str(amount_val))
@@ -322,6 +386,7 @@ def init_swagger(app):
                     "block_number": block_number,
                     "validator": source_validator,
                     "timestamp": datetime.utcnow().isoformat(),
+                    "template_id": template_id,
                     "custom": metadata or {}
                 }
                 ipfs_cid = ipfs.add_json(tx_metadata)
@@ -335,7 +400,10 @@ def init_swagger(app):
                 receiver_address=to_address,
                 amount=amount,
                 tx_hash=tx_hash,
-                ipfs_cid=ipfs_cid
+                ipfs_cid=ipfs_cid,
+                template_id=template_id,
+                template_cid=tpl.get("cid") if template_id else None,
+                template_snapshot_cid=template_snapshot_cid
             )
 
             if "error" in result:
@@ -360,6 +428,8 @@ def init_swagger(app):
             result["block_number"] = block_number
             result["validator"] = source_validator
             result["message"] = "Transfer tamamlandı. Blockchain + IPFS + OpenCBDC kaydedildi."
+            if template_id:
+                result["template_used"] = True
 
             return result, 201
 
@@ -374,6 +444,87 @@ def init_swagger(app):
                 return {"error": "transaction not found"}, 404
 
             return tx
+
+
+    # ==================== TEMPLATES (IPFS) ====================
+
+    @templates_ns.route('')
+    class TemplateList(Resource):
+        method_decorators = [wallet_required]
+
+        @templates_ns.expect(template_input_model)
+        def post(self):
+            """
+            Yeni şablon oluştur.
+            IPFS'e yazılır -> CID alınır -> Index'e kaydedilir.
+            """
+            from backend.infra.opencbdc_storage import OpenCBDCLedger
+            
+            owner = g.get('wallet_address')
+            if not owner:
+                return {"error": "unauthorized"}, 401
+                
+            data = request.get_json(silent=True) or {}
+            # Validation
+            if not data.get('template_name'):
+                return {"error": "template_name required"}, 400
+            if not data.get('payee_account'):
+                return {"error": "payee_account required"}, 400
+                
+            result = OpenCBDCLedger.create_template(owner, data)
+            return result, 201
+
+        @templates_ns.marshal_list_with(template_model)
+        def get(self):
+            """Kullanıcının şablonlarını listele (@wallet_required)."""
+            from backend.infra.opencbdc_storage import OpenCBDCLedger
+            
+            owner = g.get('wallet_address')
+            if not owner:
+                return []
+                
+            return OpenCBDCLedger.get_templates_by_owner(owner)
+
+    @templates_ns.route('/<string:template_id>')
+    class TemplateDetail(Resource):
+        method_decorators = [wallet_required]
+
+        @templates_ns.marshal_with(template_model)
+        def get(self, template_id):
+            """Template detayını getir (IPFS'ten okur)."""
+            from backend.infra.opencbdc_storage import OpenCBDCLedger
+            
+            tpl = OpenCBDCLedger.get_template(template_id)
+            if not tpl:
+                return {"error": "template not found"}, 404
+            
+            return tpl
+
+        @templates_ns.expect(template_input_model)
+        def put(self, template_id):
+            """Template güncelle (Yeni JSON -> Yeni CID)."""
+            from backend.infra.opencbdc_storage import OpenCBDCLedger
+            
+            owner = g.get('wallet_address')
+            data = request.get_json(silent=True) or {}
+            
+            result = OpenCBDCLedger.update_template(template_id, owner, data)
+            if "error" in result:
+                return result, 400
+            
+            return result
+
+        def delete(self, template_id):
+            """Template sil."""
+            from backend.infra.opencbdc_storage import OpenCBDCLedger
+            
+            owner = g.get('wallet_address')
+            result = OpenCBDCLedger.delete_template(template_id, owner)
+            
+            if "error" in result:
+                return result, 400
+            
+            return result, 200
 
     # ==================== LEDGER (OpenCBDC) ====================
 

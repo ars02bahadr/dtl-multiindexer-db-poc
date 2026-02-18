@@ -5,7 +5,9 @@ PostgreSQL yerine JSON file-based storage.
 Veri Yapısı:
 - accounts: {address -> {balance, created_at, updated_at}}
 - utxos: [{utxo_id, sender, receiver, amount, timestamp, status}]
+- utxos: [{utxo_id, sender, receiver, amount, timestamp, status}]
 - transactions: [{tx_id, sender, receiver, amount, tx_hash, ipfs_cid, status, created_at}]
+- templates_index: {tmpl_id -> {owner, template_name, cid, status, ...}}
 """
 import os
 import json
@@ -46,6 +48,7 @@ def _load_ledger() -> dict:
             "accounts": {},
             "utxos": [],
             "transactions": [],
+            "templates_index": {},
             "metadata": {
                 "created_at": datetime.utcnow().isoformat(),
                 "version": "1.0",
@@ -61,6 +64,7 @@ def _load_ledger() -> dict:
             "accounts": {},
             "utxos": [],
             "transactions": [],
+            "templates_index": {},
             "metadata": {
                 "created_at": datetime.utcnow().isoformat(),
                 "version": "1.0",
@@ -219,7 +223,10 @@ class OpenCBDCLedger:
         receiver_address: str,
         amount: Decimal,
         tx_hash: str = None,
-        ipfs_cid: str = None
+        ipfs_cid: str = None,
+        template_id: str = None,
+        template_cid: str = None,
+        template_snapshot_cid: str = None
     ) -> dict:
         """
         Transfer işlemi yap.
@@ -231,6 +238,9 @@ class OpenCBDCLedger:
             amount: Transfer miktarı
             tx_hash: Blockchain tx hash (opsiyonel)
             ipfs_cid: IPFS CID (opsiyonel)
+            template_id: Template ID (opsiyonel)
+            template_cid: Template CID (opsiyonel)
+            template_snapshot_cid: Template anlık CID (opsiyonel)
 
         Returns:
             Transfer sonucu
@@ -303,6 +313,9 @@ class OpenCBDCLedger:
                 "tx_hash": tx_hash,
                 "ipfs_cid": ipfs_cid,
                 "utxo_id": utxo_id,
+                "template_id": template_id,
+                "template_cid": template_cid,
+                "template_snapshot_cid": template_snapshot_cid,
                 "status": "confirmed",
                 "created_at": now
             }
@@ -318,7 +331,8 @@ class OpenCBDCLedger:
             "receiver": receiver_address,
             "amount": str(amount),
             "sender_new_balance": str(sender_balance - amount),
-            "receiver_new_balance": str(receiver_balance + amount)
+            "receiver_new_balance": str(receiver_balance + amount),
+            "created_at": now  # Add created_at to return
         }
 
     # ==================== TRANSACTION/UTXO QUERIES ====================
@@ -464,9 +478,218 @@ class OpenCBDCLedger:
             "created_at": ledger["metadata"].get("created_at")
         }
 
+
     @staticmethod
     def reset_ledger():
         """Ledger'ı sıfırla (TEST AMAÇLI)."""
         with _lock:
             if os.path.exists(LEDGER_FILE):
                 os.remove(LEDGER_FILE)
+
+    # ==================== TEMPLATE OPERATIONS (IPFS) ====================
+
+    @staticmethod
+    def create_template(owner: str, template_data: dict) -> dict:
+        """
+        Yeni şablon oluştur.
+        IPFS'e yaz -> CID al -> Index'e kaydet.
+
+        Args:
+            owner: Template sahibi (wallet address)
+            template_data: Şablon içeriği
+
+        Returns:
+            Template ID ve CID
+        """
+        owner = owner.lower()
+
+        with _lock:
+            ledger = _load_ledger()
+            if "templates_index" not in ledger:
+                ledger["templates_index"] = {}
+
+            now = datetime.utcnow().isoformat()
+            
+            # Template ID oluştur
+            # tpl_ + sha256(owner + name + created_at)
+            raw = f"{owner}{template_data.get('template_name', '')}{now}"
+            t_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
+            template_id = f"tpl_{t_hash}"
+
+            # Veriyi hazırla
+            full_data = template_data.copy()
+            full_data["owner_address"] = owner
+            full_data["created_at"] = now
+            full_data["updated_at"] = now
+
+            # IPFS'e yaz
+            cid = None
+            pending_ipfs = False
+            try:
+                from backend.infra.ipfs_client import IPFSClient
+                ipfs = IPFSClient()
+                cid = ipfs.add_json(full_data)
+            except Exception:
+                # IPFS çalışmıyorsa graceful degradation
+                pending_ipfs = True
+
+            # Ledger index güncelle
+            ledger["templates_index"][template_id] = {
+                "owner": owner,
+                "template_name": template_data.get("template_name"),
+                "payee_account": template_data.get("payee_account"),
+                "default_amount": template_data.get("default_amount"),
+                "cid": cid,
+                "status": "active",
+                "pending_ipfs": pending_ipfs,
+                "created_at": now,
+                "updated_at": now,
+                # Backup data in case IPFS is down forever or CID lost
+                "_backup_data": full_data if pending_ipfs else None
+            }
+
+            _save_ledger(ledger)
+
+        return {
+            "status": "success",
+            "template_id": template_id,
+            "cid": cid,
+            "pending_ipfs": pending_ipfs
+        }
+
+    @staticmethod
+    def get_template(template_id: str) -> dict:
+        """
+        Template detayını getir.
+        Index'ten bak -> CID varsa IPFS'ten içeriği çek.
+        """
+        ledger = _load_ledger()
+        index_entry = ledger.get("templates_index", {}).get(template_id)
+
+        if not index_entry:
+            return None
+        
+        if index_entry.get("status") == "deleted":
+            return None
+
+        # Base response index verisi
+        response = index_entry.copy()
+        response["template_id"] = template_id
+
+        # IPFS'ten detay çek
+        cid = index_entry.get("cid")
+        if cid:
+            try:
+                from backend.infra.ipfs_client import IPFSClient
+                ipfs = IPFSClient()
+                content = ipfs.cat_json(cid)
+                response.update(content)  # IPFS içeriğiyle zenginleştir
+            except Exception:
+                # IPFS down, varsa backup kullan veya sadece index dön
+                if index_entry.get("_backup_data"):
+                    response.update(index_entry["_backup_data"])
+                pass
+
+        return response
+
+    @staticmethod
+    def get_templates_by_owner(owner_address: str) -> List[dict]:
+        """User'a ait şablon listesi (Index'ten)."""
+        owner_address = owner_address.lower()
+        ledger = _load_ledger()
+        templates_index = ledger.get("templates_index", {})
+
+        result = []
+        for t_id, entry in templates_index.items():
+            if entry.get("owner") == owner_address and entry.get("status") == "active":
+                item = entry.copy()
+                item["template_id"] = t_id
+                # Backup data'yı listelemede gizle
+                item.pop("_backup_data", None)
+                result.append(item)
+        
+        # En yeni en üstte
+        result.sort(key=lambda x: x["created_at"], reverse=True)
+        return result
+
+    @staticmethod
+    def update_template(template_id: str, owner: str, new_data: dict) -> dict:
+        """Template güncelle (Yeni JSON -> Yeni CID)."""
+        owner = owner.lower()
+
+        with _lock:
+            ledger = _load_ledger()
+            if "templates_index" not in ledger:
+                return {"error": "ledger corrupted"}
+            
+            entry = ledger["templates_index"].get(template_id)
+            if not entry:
+                return {"error": "template not found"}
+            
+            if entry["owner"] != owner:
+                return {"error": "permission denied"}
+            
+            if entry.get("status") == "deleted":
+                 return {"error": "template deleted"}
+
+            now = datetime.utcnow().isoformat()
+            
+            # Eski veriyi al (IPFS'ten veya yedekten) - merge için
+            # Ancak basitlik için sadece new_data'yı baz alıyoruz ve override ediyoruz
+            # Ama user arayüzü zaten tüm veriyi göndermeli.
+            
+            full_data = new_data.copy()
+            full_data["owner_address"] = owner
+            full_data["created_at"] = entry["created_at"] # değişmez
+            full_data["updated_at"] = now
+            
+            cid = None
+            pending_ipfs = False
+            try:
+                from backend.infra.ipfs_client import IPFSClient
+                ipfs = IPFSClient()
+                cid = ipfs.add_json(full_data)
+            except Exception:
+                pending_ipfs = True
+
+            # Index güncelle
+            ledger["templates_index"][template_id].update({
+                "template_name": new_data.get("template_name", entry["template_name"]),
+                "payee_account": new_data.get("payee_account", entry.get("payee_account")),
+                "default_amount": new_data.get("default_amount", entry.get("default_amount")),
+                "cid": cid,
+                "pending_ipfs": pending_ipfs,
+                "updated_at": now,
+                "_backup_data": full_data if pending_ipfs else None
+            })
+
+            _save_ledger(ledger)
+
+        return {
+            "status": "success",
+            "template_id": template_id,
+            "cid": cid,
+            "pending_ipfs": pending_ipfs
+        }
+
+    @staticmethod
+    def delete_template(template_id: str, owner: str) -> dict:
+        """Template sil (soft delete)."""
+        owner = owner.lower()
+
+        with _lock:
+            ledger = _load_ledger()
+            entry = ledger.get("templates_index", {}).get(template_id)
+
+            if not entry:
+                return {"error": "template not found"}
+            
+            if entry["owner"] != owner:
+                return {"error": "permission denied"}
+
+            ledger["templates_index"][template_id]["status"] = "deleted"
+            ledger["templates_index"][template_id]["updated_at"] = datetime.utcnow().isoformat()
+            
+            _save_ledger(ledger)
+
+        return {"status": "success", "message": "template deleted"}

@@ -28,10 +28,10 @@ TRANSFERS_FILE = os.path.join(LOGS_DIR, 'transfers.txt')
 OPENCBDC_LOG_FILE = os.path.join(LOGS_DIR, 'opencbdc_ledger.txt')
 
 
-def write_transfer_log(sender: str, receiver: str, amount: Decimal, utxo_id: str = None):
+def write_transfer_log(sender: str, receiver: str, amount: Decimal, utxo_id: str = None, template_info: str = None):
     """
     transfers.txt'ye okunabilir log yaz.
-    Format: "[timestamp] 0x1111... -> 0x2222...: 500 DTL (utxo: xxx)"
+    Format: "[timestamp] 0x1111... -> 0x2222...: 500 DTL (utxo: xxx) [template: ...]"
     """
     os.makedirs(LOGS_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -43,6 +43,8 @@ def write_transfer_log(sender: str, receiver: str, amount: Decimal, utxo_id: str
         line = f"[{timestamp}] {sender_short} -> {receiver_short}: {amount} DTL"
         if utxo_id:
             line += f" (utxo: {utxo_id[:16]})"
+        if template_info:
+            line += f" {template_info}"
         f.write(line + "\n")
 
 
@@ -107,12 +109,38 @@ def scheduler_task(app):
 
                 for utxo in reversed(new_utxos):  # Eski'den yeni'ye
                     if utxo.get("type") == "transfer":
+                        # İlgili transaction'ı bul (Template bilgisi için)
+                        txs = OpenCBDCLedger.get_all_transactions(limit=50)
+                        tx = next((t for t in txs if t.get("utxo_id") == utxo["utxo_id"]), None)
+                        
+                        tpl_info = ""
+                        if tx and tx.get("template_id"):
+                            t_id = tx["template_id"]
+                            cid = tx.get("template_snapshot_cid") or tx.get("template_cid")
+                            
+                            try:
+                                if cid:
+                                    from backend.infra.ipfs_client import IPFSClient
+                                    ipfs = IPFSClient()
+                                    content = ipfs.cat_json(cid)
+                                    name = content.get("template_name", "Unknown")
+                                    payee = content.get("payee_name")
+                                    if payee:
+                                        tpl_info = f"[template: {name} / {payee}]"
+                                    else:
+                                        tpl_info = f"[template: {name}]"
+                                else:
+                                    tpl_info = f"[template: {t_id}]"
+                            except:
+                                tpl_info = f"[template: {t_id}]"
+
                         # Transfer log'u yaz
                         write_transfer_log(
                             sender=utxo["sender"],
                             receiver=utxo["receiver"],
                             amount=Decimal(utxo["amount"]),
-                            utxo_id=utxo["utxo_id"]
+                            utxo_id=utxo["utxo_id"],
+                            template_info=tpl_info
                         )
 
                         # UTXO log'u yaz

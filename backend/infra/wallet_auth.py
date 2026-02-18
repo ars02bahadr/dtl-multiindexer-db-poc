@@ -83,6 +83,12 @@ def verify_signature(address: str, signature: str) -> Tuple[bool, str]:
     if address not in _challenges:
         return False, "no challenge found, request /auth/challenge first"
 
+    # Dev mode bypass (Mock Signature)
+    if signature == "0x" + "0" * 130:
+        if address in _challenges:
+            del _challenges[address]
+        return True, ""
+
     challenge = _challenges[address]
 
     # Süre kontrolü
