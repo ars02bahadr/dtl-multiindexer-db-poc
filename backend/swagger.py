@@ -63,6 +63,7 @@ def init_swagger(app):
     # Models
     account_model = accounts_ns.model('Account', {
         'address': fields.String(description='Wallet adresi'),
+        'name': fields.String(description='Kullanıcı adı'),
         'balance': fields.String(description='Bakiye (DTL)'),
         'created_at': fields.String(),
         'updated_at': fields.String()
@@ -104,60 +105,68 @@ def init_swagger(app):
         'updated_at': fields.String()
     })
 
-    challenge_model = auth_ns.model('ChallengeResponse', {
-        'address': fields.String(),
-        'message': fields.String(description='İmzalanacak mesaj'),
-        'nonce': fields.String(),
-        'expires_in': fields.Integer()
+    login_model = auth_ns.model('LoginRequest', {
+        'username': fields.String(required=True, description='Kullanıcı adı (ör: uluer.01)'),
+        'password': fields.String(required=True, description='Şifre (varsayılan: admin.1234)')
     })
 
     # ==================== AUTH ====================
 
-    @auth_ns.route('/challenge')
-    class Challenge(Resource):
-        @auth_ns.marshal_with(challenge_model)
-        def get(self):
-            """
-            Wallet için login challenge oluştur.
-            Query param: ?address=0x...
-            """
-            from backend.infra.wallet_auth import generate_challenge
-
-            address = request.args.get('address', '').strip()
-            if not address or len(address) != 42:
-                return {"error": "valid address required (?address=0x...)"}, 400
-
-            return generate_challenge(address)
-
-    @auth_ns.route('/verify')
-    class Verify(Resource):
+    @auth_ns.route('/login')
+    class Login(Resource):
+        @auth_ns.expect(login_model)
         def post(self):
             """
-            İmzayı doğrula ve JWT token döndür.
-            Body: {"address": "0x...", "signature": "0x..."}
+            Kullanıcı adı ve şifre ile giriş yap.
+            Body: {"username": "uluer.01", "password": "admin.1234"}
             """
-            from backend.infra.wallet_auth import verify_signature, generate_token
+            from backend.infra.wallet_auth import verify_login, generate_token
 
             data = request.get_json(silent=True) or {}
-            address = data.get('address', '').strip()
-            signature = data.get('signature', '').strip()
+            username = data.get('username', '').strip()
+            password = data.get('password', '').strip()
 
-            if not address or not signature:
-                return {"error": "address and signature required"}, 400
+            if not username or not password:
+                return {"error": "username and password required"}, 400
 
-            valid, error = verify_signature(address, signature)
+            valid, user_info, error = verify_login(username, password)
 
             if not valid:
                 return {"error": error}, 401
 
-            token = generate_token(address)
+            token = generate_token(
+                user_info["address"],
+                username=user_info["username"],
+                name=user_info["name"]
+            )
 
             return {
                 "status": "success",
-                "address": address.lower(),
+                "username": user_info["username"],
+                "name": user_info["name"],
+                "address": user_info["address"],
                 "token": token,
                 "token_type": "Bearer"
             }
+
+    @auth_ns.route('/me')
+    class Me(Resource):
+        method_decorators = [wallet_required]
+
+        def get(self):
+            """Giriş yapan kullanıcının bilgilerini döndür."""
+            return {
+                "username": g.get("username"),
+                "name": g.get("user_name"),
+                "address": g.get("wallet_address")
+            }
+
+    @auth_ns.route('/users')
+    class UserList(Resource):
+        def get(self):
+            """Tüm kullanıcıları listele (şifre hariç)."""
+            from backend.infra.wallet_auth import get_all_users
+            return get_all_users()
 
     # ==================== ACCOUNTS ====================
 
@@ -304,7 +313,7 @@ def init_swagger(app):
                 return {"error": "from adresi zorunlu"}, 400
 
             # Template logic
-            template_data = {}
+            tpl = None
             template_snapshot_cid = None
             if template_id:
                 tpl = OpenCBDCLedger.get_template(template_id)
@@ -409,7 +418,7 @@ def init_swagger(app):
             if "error" in result:
                 return result, 400
 
-            # 4. Tüm validator'lara logla
+            # 4. Tüm validator'lara logla (template bilgisi dahil)
             try:
                 log_transfer_to_all_validators(
                     tx_hash=tx_hash or "pending",
@@ -418,9 +427,13 @@ def init_swagger(app):
                     amount=amount,
                     ipfs_cid=ipfs_cid,
                     block_number=block_number,
-                    source_validator=source_validator
+                    source_validator=source_validator,
+                    template_id=template_id,
+                    template_cid=tpl.get("cid") if template_id and tpl else None,
+                    template_snapshot_cid=template_snapshot_cid,
+                    template_name=tpl.get("template_name") if template_id and tpl else None
                 )
-            except Exception as e:
+            except Exception:
                 pass  # Log hatası transfer'i engellemez
 
             result["tx_hash"] = tx_hash
@@ -636,31 +649,43 @@ def init_swagger(app):
     @health_ns.route('/seed')
     class Seed(Resource):
         def post(self):
-            """Demo hesaplar oluştur (OpenCBDC'de)"""
+            """
+            Demo hesaplar oluştur (OpenCBDC'de).
+            Mevcut ledger sıfırlanır, 7 kullanıcı 1200 DTL ile oluşturulur.
+            Tüm validator ledger dosyaları da aynı şekilde oluşturulur.
+            """
             from backend.infra.opencbdc_storage import OpenCBDCLedger
+
+            # Önce mevcut ledger'ı sıfırla
+            OpenCBDCLedger.reset_ledger()
 
             created = []
 
             demo_accounts = [
-                ('0x1111111111111111111111111111111111111111', 1000),   # Alice
-                ('0x2222222222222222222222222222222222222222', 500),    # Bob
-                ('0x3333333333333333333333333333333333333333', 250),    # Charlie
-                ('0x0000000000000000000000000000000000000001', 10000),  # Admin/Bank
+                ('0xba00000000000000000000000000000000000001', 1200, 'Bahadır'),
+                ('0xul00000000000000000000000000000000000002', 1200, 'Uluer'),
+                ('0xca00000000000000000000000000000000000003', 1200, 'Çağatay'),
+                ('0xeb00000000000000000000000000000000000004', 1200, 'Ebru'),
+                ('0xbu00000000000000000000000000000000000005', 1200, 'Burcu'),
+                ('0xgi00000000000000000000000000000000000006', 1200, 'Gizem'),
+                ('0xbk00000000000000000000000000000000000007', 1200, 'Burak'),
             ]
 
-            for address, initial_balance in demo_accounts:
+            for address, initial_balance, name in demo_accounts:
                 result = OpenCBDCLedger.create_account(
                     address,
-                    Decimal(str(initial_balance))
+                    Decimal(str(initial_balance)),
+                    name=name
                 )
 
                 if result.get("status") == "success":
                     created.append({
                         "address": address,
+                        "name": name,
                         "balance": initial_balance
                     })
 
-            return {"status": "seeded", "created": created}
+            return {"status": "seeded", "created": created, "total_users": len(created)}
 
     @health_ns.route('/report')
     class Report(Resource):
@@ -848,6 +873,28 @@ def init_swagger(app):
                 lines = f.readlines()
 
             return {"ledger": lines[-30:], "total": len(lines)}
+
+    @nodes_ns.route('/validator-ledger/<string:validator_name>')
+    class ValidatorLedgerView(Resource):
+        def get(self, validator_name):
+            """
+            Belirli bir validator'ın opencbdc ledger dosyasını göster.
+            Her validator aynı veriyi tutar (transfer olduğunda hepsi güncellenir).
+            """
+            from backend.infra.opencbdc_storage import OpenCBDCLedger
+
+            valid_validators = ['validator1', 'validator2', 'validator3', 'validator4']
+            if validator_name not in valid_validators:
+                return {"error": f"Geçersiz validator. Geçerli: {valid_validators}"}, 400
+
+            data = OpenCBDCLedger.get_validator_ledger(validator_name)
+            return {
+                "validator": validator_name,
+                "accounts": list(data.get("accounts", {}).values()),
+                "total_accounts": len(data.get("accounts", {})),
+                "total_transactions": len(data.get("transactions", [])),
+                "total_utxos": len(data.get("utxos", []))
+            }
 
     @nodes_ns.route('/validator-logs/<string:validator_name>')
     class ValidatorLogs(Resource):

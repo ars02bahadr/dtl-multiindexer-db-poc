@@ -1,6 +1,7 @@
 """
 Validator Logger: Her validator node için ayrı log dosyası.
 Transfer işlemlerinde hangi validator'dan işlem yapıldığı loglanır.
+Template kullanıldıysa template ve IPFS bilgisi de loglara yazılır.
 """
 import os
 import logging
@@ -42,14 +43,7 @@ def log_to_validator(
     message: str,
     level: str = "INFO"
 ):
-    """
-    Belirli bir validator'ın log dosyasına yaz.
-
-    Args:
-        validator_name: validator1, validator2, validator3, validator4
-        message: Log mesajı
-        level: Log seviyesi (INFO, WARN, ERROR)
-    """
+    """Belirli bir validator'ın log dosyasına yaz."""
     log_path = _get_validator_log_path(validator_name)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -66,20 +60,15 @@ def log_transfer_to_all_validators(
     amount: Decimal,
     ipfs_cid: Optional[str] = None,
     block_number: Optional[int] = None,
-    source_validator: Optional[str] = None
+    source_validator: Optional[str] = None,
+    template_id: Optional[str] = None,
+    template_cid: Optional[str] = None,
+    template_snapshot_cid: Optional[str] = None,
+    template_name: Optional[str] = None
 ):
     """
     Transfer işlemini tüm validator loglarına yaz.
-    Blockchain'e yazılan transaction tüm node'larda görülür.
-
-    Args:
-        tx_hash: Blockchain transaction hash
-        sender: Gönderen adresi
-        receiver: Alıcı adresi
-        amount: Transfer miktarı
-        ipfs_cid: IPFS CID (opsiyonel)
-        block_number: Blok numarası (opsiyonel)
-        source_validator: İşlemin yapıldığı validator
+    Template kullanıldıysa IPFS CID bilgisi de eklenir.
     """
     _ensure_log_dir()
 
@@ -115,7 +104,18 @@ def log_transfer_to_all_validators(
         if block_number:
             lines.append(f"[{timestamp}] [INFO]   block: #{block_number}")
 
+        # Template bilgisi
+        if template_id:
+            lines.append(f"[{timestamp}] [INFO]   template_id: {template_id}")
+            if template_name:
+                lines.append(f"[{timestamp}] [INFO]   template_name: {template_name}")
+            if template_cid:
+                lines.append(f"[{timestamp}] [INFO]   template_ipfs_cid: {template_cid}")
+            if template_snapshot_cid:
+                lines.append(f"[{timestamp}] [INFO]   template_snapshot_cid: {template_snapshot_cid}")
+
         lines.append(f"[{timestamp}] [INFO]   status: CONFIRMED")
+        lines.append(f"[{timestamp}] [INFO]   opencbdc_ledger: ALL VALIDATORS SYNCED")
         lines.append("")  # Boş satır
 
         with open(log_path, 'a', encoding='utf-8') as f:
@@ -127,14 +127,7 @@ def log_block_import(
     block_number: int,
     tx_count: int = 0
 ):
-    """
-    Blok import logunu yaz (docker logs formatına benzer).
-
-    Args:
-        validator_name: Validator adı
-        block_number: İmport edilen blok numarası
-        tx_count: Bloktaki transaction sayısı
-    """
+    """Blok import logunu yaz."""
     log_path = _get_validator_log_path(validator_name)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -155,15 +148,7 @@ def log_sync_status(
     block_number: int,
     is_synced: bool = True
 ):
-    """
-    Sync durumunu logla.
-
-    Args:
-        validator_name: Validator adı
-        peer_count: Bağlı peer sayısı
-        block_number: Mevcut blok numarası
-        is_synced: Senkronize mi
-    """
+    """Sync durumunu logla."""
     log_path = _get_validator_log_path(validator_name)
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
 
@@ -177,10 +162,7 @@ def log_sync_status(
 
 
 def init_validator_logs():
-    """
-    Validator log dosyalarını başlat.
-    Her dosyaya başlangıç header'ı yaz.
-    """
+    """Validator log dosyalarını başlat."""
     _ensure_log_dir()
 
     for validator_name, info in VALIDATORS.items():
@@ -190,7 +172,6 @@ def init_validator_logs():
         log_path = _get_validator_log_path(validator_name)
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Dosya yoksa başlık yaz
         if not os.path.exists(log_path):
             with open(log_path, 'w', encoding='utf-8') as f:
                 f.write(f"{'='*60}\n")
@@ -201,21 +182,12 @@ def init_validator_logs():
 
 
 def get_validator_status(validator_name: str) -> dict:
-    """
-    Validator'ın güncel durumunu al.
-
-    Args:
-        validator_name: Validator adı
-
-    Returns:
-        Status dict
-    """
+    """Validator'ın güncel durumunu al."""
     info = VALIDATORS.get(validator_name)
     if not info or not info.get("url"):
         return {"status": "offline", "error": "URL not configured"}
 
     try:
-        # Block number
         resp = requests.post(
             info["url"],
             json={
@@ -231,7 +203,6 @@ def get_validator_status(validator_name: str) -> dict:
             data = resp.json()
             block_number = int(data.get("result", "0x0"), 16)
 
-            # Peer count
             peer_resp = requests.post(
                 info["url"],
                 json={
@@ -261,15 +232,7 @@ def get_validator_status(validator_name: str) -> dict:
 
 
 def broadcast_to_all_validators(tx_data: dict) -> dict:
-    """
-    Transaction verisini tüm validator'lara broadcast et ve logla.
-
-    Args:
-        tx_data: Transaction bilgileri
-
-    Returns:
-        Broadcast sonuçları
-    """
+    """Transaction verisini tüm validator'lara broadcast et ve logla."""
     results = {
         "total": 0,
         "success": 0,
@@ -292,7 +255,6 @@ def broadcast_to_all_validators(tx_data: dict) -> dict:
                 "block": status.get("block_number")
             })
 
-            # Log block import
             log_block_import(
                 validator_name,
                 status.get("block_number", 0),

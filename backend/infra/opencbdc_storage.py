@@ -2,9 +2,11 @@
 OpenCBDC Storage - UTXO-based ledger storage.
 PostgreSQL yerine JSON file-based storage.
 
+Her validator için ayrı ledger dosyası tutulur.
+Transfer yapıldığında TÜM validator ledger'ları güncellenir.
+
 Veri Yapısı:
-- accounts: {address -> {balance, created_at, updated_at}}
-- utxos: [{utxo_id, sender, receiver, amount, timestamp, status}]
+- accounts: {address -> {name, balance, created_at, updated_at}}
 - utxos: [{utxo_id, sender, receiver, amount, timestamp, status}]
 - transactions: [{tx_id, sender, receiver, amount, tx_hash, ipfs_cid, status, created_at}]
 - templates_index: {tmpl_id -> {owner, template_name, cid, status, ...}}
@@ -20,8 +22,17 @@ import time
 
 # Storage directory
 STORAGE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
+
+# Her validator için ayrı ledger dosyası
+VALIDATOR_LEDGER_FILES = {
+    "validator1": os.path.join(STORAGE_DIR, 'opencbdc_validator1.json'),
+    "validator2": os.path.join(STORAGE_DIR, 'opencbdc_validator2.json'),
+    "validator3": os.path.join(STORAGE_DIR, 'opencbdc_validator3.json'),
+    "validator4": os.path.join(STORAGE_DIR, 'opencbdc_validator4.json'),
+}
+
+# Ana ledger (tüm validator'ların ortak referansı)
 LEDGER_FILE = os.path.join(STORAGE_DIR, 'opencbdc_ledger.json')
-LOCK_FILE = os.path.join(STORAGE_DIR, '.lock')
 
 # Thread lock for concurrent access
 _lock = threading.Lock()
@@ -40,44 +51,47 @@ def _ensure_storage():
     os.makedirs(STORAGE_DIR, exist_ok=True)
 
 
+def _empty_ledger() -> dict:
+    """Boş ledger yapısı."""
+    return {
+        "accounts": {},
+        "utxos": [],
+        "transactions": [],
+        "templates_index": {},
+        "metadata": {
+            "created_at": datetime.utcnow().isoformat(),
+            "version": "2.0",
+            "currency": "DTL"
+        }
+    }
+
+
 def _load_ledger() -> dict:
-    """Ledger dosyasından veri oku."""
+    """Ana ledger dosyasından veri oku."""
     _ensure_storage()
     if not os.path.exists(LEDGER_FILE):
-        return {
-            "accounts": {},
-            "utxos": [],
-            "transactions": [],
-            "templates_index": {},
-            "metadata": {
-                "created_at": datetime.utcnow().isoformat(),
-                "version": "1.0",
-                "currency": "DTL"
-            }
-        }
+        return _empty_ledger()
 
     try:
         with open(LEDGER_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except json.JSONDecodeError:
-        return {
-            "accounts": {},
-            "utxos": [],
-            "transactions": [],
-            "templates_index": {},
-            "metadata": {
-                "created_at": datetime.utcnow().isoformat(),
-                "version": "1.0",
-                "currency": "DTL"
-            }
-        }
+        return _empty_ledger()
 
 
 def _save_ledger(data: dict):
-    """Ledger dosyasına veri yaz."""
+    """Ana ledger + TÜM validator ledger dosyalarına yaz."""
     _ensure_storage()
+    content = json.dumps(data, indent=2, ensure_ascii=False, cls=DecimalEncoder)
+
+    # Ana ledger
     with open(LEDGER_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False, cls=DecimalEncoder)
+        f.write(content)
+
+    # Her validator'a da aynı veriyi yaz
+    for validator_name, filepath in VALIDATOR_LEDGER_FILES.items():
+        with open(filepath, 'w', encoding='utf-8') as f:
+            f.write(content)
 
 
 def _generate_utxo_id(sender: str, receiver: str, amount: str) -> str:
@@ -94,22 +108,36 @@ def _generate_tx_id() -> int:
     return max(tx["tx_id"] for tx in ledger["transactions"]) + 1
 
 
+# Varsayılan kullanıcılar (isim -> adres eşlemesi)
+DEFAULT_USERS = {
+    "0xba00000000000000000000000000000000000001": "Bahadır",
+    "0xul00000000000000000000000000000000000002": "Uluer",
+    "0xca00000000000000000000000000000000000003": "Çağatay",
+    "0xeb00000000000000000000000000000000000004": "Ebru",
+    "0xbu00000000000000000000000000000000000005": "Burcu",
+    "0xgi00000000000000000000000000000000000006": "Gizem",
+    "0xbk00000000000000000000000000000000000007": "Burak",
+}
+
+
 class OpenCBDCLedger:
     """
     OpenCBDC UTXO-based Ledger.
     Thread-safe operations for account management and transfers.
+    Tüm yazma işlemleri ana ledger + tüm validator ledger'larına yazılır.
     """
 
     # ==================== ACCOUNT OPERATIONS ====================
 
     @staticmethod
-    def create_account(address: str, initial_balance: Decimal = Decimal("0")) -> dict:
+    def create_account(address: str, initial_balance: Decimal = Decimal("0"), name: str = None) -> dict:
         """
         Yeni hesap oluştur.
 
         Args:
             address: Wallet adresi (lowercase)
             initial_balance: Başlangıç bakiyesi
+            name: Kullanıcı adı
 
         Returns:
             Account bilgisi
@@ -125,6 +153,7 @@ class OpenCBDCLedger:
             now = datetime.utcnow().isoformat()
             account = {
                 "address": address,
+                "name": name or DEFAULT_USERS.get(address, "Unknown"),
                 "balance": str(initial_balance),
                 "created_at": now,
                 "updated_at": now
@@ -151,15 +180,7 @@ class OpenCBDCLedger:
 
     @staticmethod
     def get_account(address: str) -> Optional[dict]:
-        """
-        Hesap bilgisini getir.
-
-        Args:
-            address: Wallet adresi
-
-        Returns:
-            Account dict veya None
-        """
+        """Hesap bilgisini getir."""
         address = address.lower()
         ledger = _load_ledger()
         return ledger["accounts"].get(address)
@@ -172,15 +193,7 @@ class OpenCBDCLedger:
 
     @staticmethod
     def get_balance(address: str) -> Decimal:
-        """
-        Hesap bakiyesini getir.
-
-        Args:
-            address: Wallet adresi
-
-        Returns:
-            Bakiye (Decimal)
-        """
+        """Hesap bakiyesini getir."""
         address = address.lower()
         ledger = _load_ledger()
         account = ledger["accounts"].get(address)
@@ -190,16 +203,7 @@ class OpenCBDCLedger:
 
     @staticmethod
     def update_balance(address: str, new_balance: Decimal) -> bool:
-        """
-        Hesap bakiyesini güncelle.
-
-        Args:
-            address: Wallet adresi
-            new_balance: Yeni bakiye
-
-        Returns:
-            Başarılı mı
-        """
+        """Hesap bakiyesini güncelle."""
         address = address.lower()
 
         with _lock:
@@ -231,19 +235,7 @@ class OpenCBDCLedger:
         """
         Transfer işlemi yap.
         UTXO oluşturur ve bakiyeleri günceller.
-
-        Args:
-            sender_address: Gönderen adresi
-            receiver_address: Alıcı adresi
-            amount: Transfer miktarı
-            tx_hash: Blockchain tx hash (opsiyonel)
-            ipfs_cid: IPFS CID (opsiyonel)
-            template_id: Template ID (opsiyonel)
-            template_cid: Template CID (opsiyonel)
-            template_snapshot_cid: Template anlık CID (opsiyonel)
-
-        Returns:
-            Transfer sonucu
+        Tüm validator ledger'ları otomatik güncellenir.
         """
         sender_address = sender_address.lower()
         receiver_address = receiver_address.lower()
@@ -273,6 +265,7 @@ class OpenCBDCLedger:
                 now = datetime.utcnow().isoformat()
                 ledger["accounts"][receiver_address] = {
                     "address": receiver_address,
+                    "name": DEFAULT_USERS.get(receiver_address, "Unknown"),
                     "balance": "0",
                     "created_at": now,
                     "updated_at": now
@@ -304,7 +297,7 @@ class OpenCBDCLedger:
             ledger["utxos"].append(utxo)
 
             # Transaction kaydı
-            tx_id = _generate_tx_id()
+            tx_id = max((tx["tx_id"] for tx in ledger["transactions"]), default=0) + 1
             transaction = {
                 "tx_id": tx_id,
                 "sender": sender_address,
@@ -332,7 +325,7 @@ class OpenCBDCLedger:
             "amount": str(amount),
             "sender_new_balance": str(sender_balance - amount),
             "receiver_new_balance": str(receiver_balance + amount),
-            "created_at": now  # Add created_at to return
+            "created_at": now
         }
 
     # ==================== TRANSACTION/UTXO QUERIES ====================
@@ -357,7 +350,6 @@ class OpenCBDCLedger:
             if tx["sender"] == address or tx["receiver"] == address
         ]
 
-        # En son işlemler önce
         txs.sort(key=lambda x: x["created_at"], reverse=True)
         return txs[:limit]
 
@@ -398,18 +390,7 @@ class OpenCBDCLedger:
 
     @staticmethod
     def mint(receiver_address: str, amount: Decimal, reason: str = "mint") -> dict:
-        """
-        Yeni para bas (mint).
-        Central bank gibi yeni DTL oluştur.
-
-        Args:
-            receiver_address: Alıcı adresi
-            amount: Basılacak miktar
-            reason: Sebep
-
-        Returns:
-            Mint sonucu
-        """
+        """Yeni para bas (mint)."""
         receiver_address = receiver_address.lower()
 
         if amount <= 0:
@@ -418,22 +399,20 @@ class OpenCBDCLedger:
         with _lock:
             ledger = _load_ledger()
 
-            # Alıcı yoksa oluştur
             now = datetime.utcnow().isoformat()
             if receiver_address not in ledger["accounts"]:
                 ledger["accounts"][receiver_address] = {
                     "address": receiver_address,
+                    "name": DEFAULT_USERS.get(receiver_address, "Unknown"),
                     "balance": "0",
                     "created_at": now,
                     "updated_at": now
                 }
 
-            # Bakiyeyi güncelle
             current = Decimal(ledger["accounts"][receiver_address]["balance"])
             ledger["accounts"][receiver_address]["balance"] = str(current + amount)
             ledger["accounts"][receiver_address]["updated_at"] = now
 
-            # UTXO oluştur
             utxo_id = _generate_utxo_id("mint", receiver_address, str(amount))
             utxo = {
                 "utxo_id": utxo_id,
@@ -478,29 +457,31 @@ class OpenCBDCLedger:
             "created_at": ledger["metadata"].get("created_at")
         }
 
-
     @staticmethod
     def reset_ledger():
-        """Ledger'ı sıfırla (TEST AMAÇLI)."""
+        """Ledger'ı sıfırla (TEST AMAÇLI). Ana + tüm validator ledger'ları silinir."""
         with _lock:
-            if os.path.exists(LEDGER_FILE):
-                os.remove(LEDGER_FILE)
+            for filepath in [LEDGER_FILE] + list(VALIDATOR_LEDGER_FILES.values()):
+                if os.path.exists(filepath):
+                    os.remove(filepath)
+
+    @staticmethod
+    def get_validator_ledger(validator_name: str) -> dict:
+        """Belirli bir validator'ın ledger dosyasını oku."""
+        filepath = VALIDATOR_LEDGER_FILES.get(validator_name)
+        if not filepath or not os.path.exists(filepath):
+            return _empty_ledger()
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            return _empty_ledger()
 
     # ==================== TEMPLATE OPERATIONS (IPFS) ====================
 
     @staticmethod
     def create_template(owner: str, template_data: dict) -> dict:
-        """
-        Yeni şablon oluştur.
-        IPFS'e yaz -> CID al -> Index'e kaydet.
-
-        Args:
-            owner: Template sahibi (wallet address)
-            template_data: Şablon içeriği
-
-        Returns:
-            Template ID ve CID
-        """
+        """Yeni şablon oluştur. IPFS'e yaz -> CID al -> Index'e kaydet."""
         owner = owner.lower()
 
         with _lock:
@@ -509,20 +490,16 @@ class OpenCBDCLedger:
                 ledger["templates_index"] = {}
 
             now = datetime.utcnow().isoformat()
-            
-            # Template ID oluştur
-            # tpl_ + sha256(owner + name + created_at)
+
             raw = f"{owner}{template_data.get('template_name', '')}{now}"
             t_hash = hashlib.sha256(raw.encode()).hexdigest()[:16]
             template_id = f"tpl_{t_hash}"
 
-            # Veriyi hazırla
             full_data = template_data.copy()
             full_data["owner_address"] = owner
             full_data["created_at"] = now
             full_data["updated_at"] = now
 
-            # IPFS'e yaz
             cid = None
             pending_ipfs = False
             try:
@@ -530,21 +507,20 @@ class OpenCBDCLedger:
                 ipfs = IPFSClient()
                 cid = ipfs.add_json(full_data)
             except Exception:
-                # IPFS çalışmıyorsa graceful degradation
                 pending_ipfs = True
 
-            # Ledger index güncelle
             ledger["templates_index"][template_id] = {
                 "owner": owner,
                 "template_name": template_data.get("template_name"),
+                "payee_name": template_data.get("payee_name"),
                 "payee_account": template_data.get("payee_account"),
                 "default_amount": template_data.get("default_amount"),
+                "description": template_data.get("description"),
                 "cid": cid,
                 "status": "active",
                 "pending_ipfs": pending_ipfs,
                 "created_at": now,
                 "updated_at": now,
-                # Backup data in case IPFS is down forever or CID lost
                 "_backup_data": full_data if pending_ipfs else None
             }
 
@@ -559,42 +535,35 @@ class OpenCBDCLedger:
 
     @staticmethod
     def get_template(template_id: str) -> dict:
-        """
-        Template detayını getir.
-        Index'ten bak -> CID varsa IPFS'ten içeriği çek.
-        """
+        """Template detayını getir."""
         ledger = _load_ledger()
         index_entry = ledger.get("templates_index", {}).get(template_id)
 
         if not index_entry:
             return None
-        
+
         if index_entry.get("status") == "deleted":
             return None
 
-        # Base response index verisi
         response = index_entry.copy()
         response["template_id"] = template_id
 
-        # IPFS'ten detay çek
         cid = index_entry.get("cid")
         if cid:
             try:
                 from backend.infra.ipfs_client import IPFSClient
                 ipfs = IPFSClient()
                 content = ipfs.cat_json(cid)
-                response.update(content)  # IPFS içeriğiyle zenginleştir
+                response.update(content)
             except Exception:
-                # IPFS down, varsa backup kullan veya sadece index dön
                 if index_entry.get("_backup_data"):
                     response.update(index_entry["_backup_data"])
-                pass
 
         return response
 
     @staticmethod
     def get_templates_by_owner(owner_address: str) -> List[dict]:
-        """User'a ait şablon listesi (Index'ten)."""
+        """User'a ait şablon listesi."""
         owner_address = owner_address.lower()
         ledger = _load_ledger()
         templates_index = ledger.get("templates_index", {})
@@ -604,11 +573,9 @@ class OpenCBDCLedger:
             if entry.get("owner") == owner_address and entry.get("status") == "active":
                 item = entry.copy()
                 item["template_id"] = t_id
-                # Backup data'yı listelemede gizle
                 item.pop("_backup_data", None)
                 result.append(item)
-        
-        # En yeni en üstte
+
         result.sort(key=lambda x: x["created_at"], reverse=True)
         return result
 
@@ -621,28 +588,24 @@ class OpenCBDCLedger:
             ledger = _load_ledger()
             if "templates_index" not in ledger:
                 return {"error": "ledger corrupted"}
-            
+
             entry = ledger["templates_index"].get(template_id)
             if not entry:
                 return {"error": "template not found"}
-            
+
             if entry["owner"] != owner:
                 return {"error": "permission denied"}
-            
+
             if entry.get("status") == "deleted":
                  return {"error": "template deleted"}
 
             now = datetime.utcnow().isoformat()
-            
-            # Eski veriyi al (IPFS'ten veya yedekten) - merge için
-            # Ancak basitlik için sadece new_data'yı baz alıyoruz ve override ediyoruz
-            # Ama user arayüzü zaten tüm veriyi göndermeli.
-            
+
             full_data = new_data.copy()
             full_data["owner_address"] = owner
-            full_data["created_at"] = entry["created_at"] # değişmez
+            full_data["created_at"] = entry["created_at"]
             full_data["updated_at"] = now
-            
+
             cid = None
             pending_ipfs = False
             try:
@@ -652,11 +615,12 @@ class OpenCBDCLedger:
             except Exception:
                 pending_ipfs = True
 
-            # Index güncelle
             ledger["templates_index"][template_id].update({
                 "template_name": new_data.get("template_name", entry["template_name"]),
+                "payee_name": new_data.get("payee_name", entry.get("payee_name")),
                 "payee_account": new_data.get("payee_account", entry.get("payee_account")),
                 "default_amount": new_data.get("default_amount", entry.get("default_amount")),
+                "description": new_data.get("description", entry.get("description")),
                 "cid": cid,
                 "pending_ipfs": pending_ipfs,
                 "updated_at": now,
@@ -683,13 +647,13 @@ class OpenCBDCLedger:
 
             if not entry:
                 return {"error": "template not found"}
-            
+
             if entry["owner"] != owner:
                 return {"error": "permission denied"}
 
             ledger["templates_index"][template_id]["status"] = "deleted"
             ledger["templates_index"][template_id]["updated_at"] = datetime.utcnow().isoformat()
-            
+
             _save_ledger(ledger)
 
         return {"status": "success", "message": "template deleted"}
