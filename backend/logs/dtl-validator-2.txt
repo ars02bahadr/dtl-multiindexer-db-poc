@@ -50,3 +50,57 @@
 [2026-02-21 16:47:09.040] [INFO]   status: CONFIRMED
 [2026-02-21 16:47:09.040] [INFO]   opencbdc_ledger: ALL VALIDATORS SYNCED
 
+[2026-02-21 16:50:46.027] [INFO] <<< INCOMING TRANSFER (synced)
+[2026-02-21 16:50:46.027] [INFO]   tx_hash: pending
+[2026-02-21 16:50:46.027] [INFO]   from: 0xeb000000...
+[2026-02-21 16:50:46.027] [INFO]   to: 0xba000000...
+[2026-02-21 16:50:46.027] [INFO]   amount: 700 DTL
+[2026-02-21 16:50:46.027] [INFO]   template_id: tpl_3083a3f7d2881a5d
+[2026-02-21 16:50:46.027] [INFO]   template_name: ipfs para deneme
+[2026-02-21 16:50:46.027] [INFO]   status: CONFIRMED
+[2026-02-21 16:50:46.027] [INFO]   opencbdc_ledger: ALL VALIDATORS SYNCED
+
+[2026-02-21 16:51:35.157] [INFO] <<< INCOMING TRANSFER (synced)
+[2026-02-21 16:51:35.157] [INFO]   tx_hash: pending
+[2026-02-21 16:51:35.157] [INFO]   from: 0xeb000000...
+[2026-02-21 16:51:35.157] [INFO]   to: 0xbk000000...
+[2026-02-21 16:51:35.157] [INFO]   amount: 200 DTL
+[2026-02-21 16:51:35.157] [INFO]   status: CONFIRMED
+[2026-02-21 16:51:35.157] [INFO]   opencbdc_ledger: ALL VALIDATORS SYNCED
+
+[2026-02-21 16:52:35.441] [INFO] <<< INCOMING TRANSFER (synced)
+[2026-02-21 16:52:35.441] [INFO]   tx_hash: pending
+[2026-02-21 16:52:35.441] [INFO]   from: 0xeb000000...
+[2026-02-21 16:52:35.441] [INFO]   to: 0xba000000...
+[2026-02-21 16:52:35.441] [INFO]   amount: 500 DTL
+[2026-02-21 16:52:35.441] [INFO]   template_id: tpl_b59f5f7370fe25c7
+[2026-02-21 16:52:35.441] [INFO]   template_name: deneme
+[2026-02-21 16:52:35.441] [INFO]   status: CONFIRMED
+[2026-02-21 16:52:35.441] [INFO]   opencbdc_ledger: ALL VALIDATORS SYNCED
+
+[2026-02-21 16:52:46.357] [INFO] <<< INCOMING TRANSFER (synced)
+[2026-02-21 16:52:46.357] [INFO]   tx_hash: pending
+[2026-02-21 16:52:46.357] [INFO]   from: 0xeb000000...
+[2026-02-21 16:52:46.357] [INFO]   to: 0xgi000000...
+[2026-02-21 16:52:46.357] [INFO]   amount: 7 DTL
+[2026-02-21 16:52:46.357] [INFO]   status: CONFIRMED
+[2026-02-21 16:52:46.357] [INFO]   opencbdc_ledger: ALL VALIDATORS SYNCED
+
+[2026-02-21 16:52:50.475] [INFO] <<< INCOMING TRANSFER (synced)
+[2026-02-21 16:52:50.475] [INFO]   tx_hash: pending
+[2026-02-21 16:52:50.475] [INFO]   from: 0xeb000000...
+[2026-02-21 16:52:50.475] [INFO]   to: 0xbu000000...
+[2026-02-21 16:52:50.475] [INFO]   amount: 12 DTL
+[2026-02-21 16:52:50.475] [INFO]   status: CONFIRMED
+[2026-02-21 16:52:50.475] [INFO]   opencbdc_ledger: ALL VALIDATORS SYNCED
+
+[2026-02-21 16:53:20.329] [INFO] <<< INCOMING TRANSFER (synced)
+[2026-02-21 16:53:20.329] [INFO]   tx_hash: pending
+[2026-02-21 16:53:20.329] [INFO]   from: 0xeb000000...
+[2026-02-21 16:53:20.329] [INFO]   to: 0xbu000000...
+[2026-02-21 16:53:20.329] [INFO]   amount: 12 DTL
+[2026-02-21 16:53:20.329] [INFO]   template_id: tpl_b59f5f7370fe25c7
+[2026-02-21 16:53:20.329] [INFO]   template_name: deneme
+[2026-02-21 16:53:20.329] [INFO]   status: CONFIRMED
+[2026-02-21 16:53:20.329] [INFO]   opencbdc_ledger: ALL VALIDATORS SYNCED
+

@@ -503,7 +503,7 @@ onMounted(() => {
             <div v-for="v in VALIDATORS" :key="v.id" class="log-group">
               <div class="log-label">Validator {{ v.id }}</div>
               <div class="log-content">
-                <div v-for="(l, idx) in (validatorLogs[v.id] || []).slice(-4)" :key="idx">{{ l }}</div>
+                <div v-for="(l, idx) in (validatorLogs[v.id] || []).slice(-12)" :key="idx">{{ l }}</div>
                 <div v-if="!(validatorLogs[v.id] || []).length" class="empty-log">Henüz log yok</div>
               </div>
             </div>
@@ -718,7 +718,7 @@ tr.highlight { background: rgba(56, 189, 248, 0.1); }
 .log-content {
   background: #0f172a; padding: 8px; border-radius: 4px;
   font-family: monospace; font-size: 9px; color: #bef264;
-  max-height: 100px; overflow-y: auto;
+  max-height: 200px; overflow-y: auto;
 }
 .empty-log { color: #475569; }
 

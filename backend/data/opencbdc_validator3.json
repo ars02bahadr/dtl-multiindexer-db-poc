@@ -3,122 +3,239 @@
     "0xba00000000000000000000000000000000000001": {
       "address": "0xba00000000000000000000000000000000000001",
       "name": "Bahadır",
-      "balance": "1200",
-      "created_at": "2026-02-21T13:47:48.090783",
-      "updated_at": "2026-02-21T13:47:48.090783"
+      "balance": "1700",
+      "created_at": "2026-02-21T13:51:42.855222",
+      "updated_at": "2026-02-21T13:52:35.439332"
     },
     "0xul00000000000000000000000000000000000002": {
       "address": "0xul00000000000000000000000000000000000002",
       "name": "Uluer",
       "balance": "1200",
-      "created_at": "2026-02-21T13:47:48.093849",
-      "updated_at": "2026-02-21T13:47:48.093849"
+      "created_at": "2026-02-21T13:51:42.857660",
+      "updated_at": "2026-02-21T13:51:42.857660"
     },
     "0xca00000000000000000000000000000000000003": {
       "address": "0xca00000000000000000000000000000000000003",
       "name": "Çağatay",
       "balance": "1200",
-      "created_at": "2026-02-21T13:47:48.096228",
-      "updated_at": "2026-02-21T13:47:48.096228"
+      "created_at": "2026-02-21T13:51:42.859362",
+      "updated_at": "2026-02-21T13:51:42.859362"
     },
     "0xeb00000000000000000000000000000000000004": {
       "address": "0xeb00000000000000000000000000000000000004",
       "name": "Ebru",
-      "balance": "1200",
-      "created_at": "2026-02-21T13:47:48.098093",
-      "updated_at": "2026-02-21T13:47:48.098093"
+      "balance": "669",
+      "created_at": "2026-02-21T13:51:42.862930",
+      "updated_at": "2026-02-21T13:53:20.327624"
     },
     "0xbu00000000000000000000000000000000000005": {
       "address": "0xbu00000000000000000000000000000000000005",
       "name": "Burcu",
-      "balance": "1200",
-      "created_at": "2026-02-21T13:47:48.099769",
-      "updated_at": "2026-02-21T13:47:48.099769"
+      "balance": "1224",
+      "created_at": "2026-02-21T13:51:42.865406",
+      "updated_at": "2026-02-21T13:53:20.327624"
     },
     "0xgi00000000000000000000000000000000000006": {
       "address": "0xgi00000000000000000000000000000000000006",
       "name": "Gizem",
-      "balance": "1200",
-      "created_at": "2026-02-21T13:47:48.101130",
-      "updated_at": "2026-02-21T13:47:48.101130"
+      "balance": "1207",
+      "created_at": "2026-02-21T13:51:42.867884",
+      "updated_at": "2026-02-21T13:52:46.354430"
     },
     "0xbk00000000000000000000000000000000000007": {
       "address": "0xbk00000000000000000000000000000000000007",
       "name": "Burak",
       "balance": "1200",
-      "created_at": "2026-02-21T13:47:48.102984",
-      "updated_at": "2026-02-21T13:47:48.102984"
+      "created_at": "2026-02-21T13:51:42.870137",
+      "updated_at": "2026-02-21T13:51:42.870137"
     }
   },
   "utxos": [
     {
-      "utxo_id": "utxo_ef6d1e64ce19c98b",
+      "utxo_id": "utxo_bc6185b3ba5edc0a",
       "sender": "mint",
       "receiver": "0xba00000000000000000000000000000000000001",
       "amount": "1200",
-      "timestamp": "2026-02-21T13:47:48.090783",
+      "timestamp": "2026-02-21T13:51:42.855222",
       "status": "confirmed",
       "type": "mint"
     },
     {
-      "utxo_id": "utxo_64547a8fa06aa601",
+      "utxo_id": "utxo_692c5772fc48b75d",
       "sender": "mint",
       "receiver": "0xul00000000000000000000000000000000000002",
       "amount": "1200",
-      "timestamp": "2026-02-21T13:47:48.093849",
+      "timestamp": "2026-02-21T13:51:42.857660",
       "status": "confirmed",
       "type": "mint"
     },
     {
-      "utxo_id": "utxo_542002d91f2ff23c",
+      "utxo_id": "utxo_bb559b6114adc740",
       "sender": "mint",
       "receiver": "0xca00000000000000000000000000000000000003",
       "amount": "1200",
-      "timestamp": "2026-02-21T13:47:48.096228",
+      "timestamp": "2026-02-21T13:51:42.859362",
       "status": "confirmed",
       "type": "mint"
     },
     {
-      "utxo_id": "utxo_4c6408f3f0750b00",
+      "utxo_id": "utxo_ea9abcfdf0e6449f",
       "sender": "mint",
       "receiver": "0xeb00000000000000000000000000000000000004",
       "amount": "1200",
-      "timestamp": "2026-02-21T13:47:48.098093",
+      "timestamp": "2026-02-21T13:51:42.862930",
       "status": "confirmed",
       "type": "mint"
     },
     {
-      "utxo_id": "utxo_05b1507025b1a73e",
+      "utxo_id": "utxo_20a05f871816d796",
       "sender": "mint",
       "receiver": "0xbu00000000000000000000000000000000000005",
       "amount": "1200",
-      "timestamp": "2026-02-21T13:47:48.099769",
+      "timestamp": "2026-02-21T13:51:42.865406",
       "status": "confirmed",
       "type": "mint"
     },
     {
-      "utxo_id": "utxo_9797de51300be60a",
+      "utxo_id": "utxo_e798c8e092f3ac40",
       "sender": "mint",
       "receiver": "0xgi00000000000000000000000000000000000006",
       "amount": "1200",
-      "timestamp": "2026-02-21T13:47:48.101130",
+      "timestamp": "2026-02-21T13:51:42.867884",
       "status": "confirmed",
       "type": "mint"
     },
     {
-      "utxo_id": "utxo_a40ce582dd0bde92",
+      "utxo_id": "utxo_179bb6e39fc1dcfc",
       "sender": "mint",
       "receiver": "0xbk00000000000000000000000000000000000007",
       "amount": "1200",
-      "timestamp": "2026-02-21T13:47:48.102984",
+      "timestamp": "2026-02-21T13:51:42.870137",
       "status": "confirmed",
       "type": "mint"
+    },
+    {
+      "utxo_id": "utxo_8038c0281ab5f11d",
+      "sender": "0xeb00000000000000000000000000000000000004",
+      "receiver": "0xba00000000000000000000000000000000000001",
+      "amount": "500",
+      "timestamp": "2026-02-21T13:52:35.439332",
+      "status": "confirmed",
+      "type": "transfer"
+    },
+    {
+      "utxo_id": "utxo_5a06fc67006ea8b3",
+      "sender": "0xeb00000000000000000000000000000000000004",
+      "receiver": "0xgi00000000000000000000000000000000000006",
+      "amount": "7",
+      "timestamp": "2026-02-21T13:52:46.354430",
+      "status": "confirmed",
+      "type": "transfer"
+    },
+    {
+      "utxo_id": "utxo_fada2285dd7c746e",
+      "sender": "0xeb00000000000000000000000000000000000004",
+      "receiver": "0xbu00000000000000000000000000000000000005",
+      "amount": "12",
+      "timestamp": "2026-02-21T13:52:50.473107",
+      "status": "confirmed",
+      "type": "transfer"
+    },
+    {
+      "utxo_id": "utxo_8f4f1f4b045f5604",
+      "sender": "0xeb00000000000000000000000000000000000004",
+      "receiver": "0xbu00000000000000000000000000000000000005",
+      "amount": "12",
+      "timestamp": "2026-02-21T13:53:20.327624",
+      "status": "confirmed",
+      "type": "transfer"
     }
   ],
-  "transactions": [],
-  "templates_index": {},
+  "transactions": [
+    {
+      "tx_id": 1,
+      "sender": "0xeb00000000000000000000000000000000000004",
+      "receiver": "0xba00000000000000000000000000000000000001",
+      "amount": "500",
+      "tx_hash": null,
+      "ipfs_cid": null,
+      "utxo_id": "utxo_8038c0281ab5f11d",
+      "template_id": "tpl_b59f5f7370fe25c7",
+      "template_cid": null,
+      "template_snapshot_cid": null,
+      "status": "confirmed",
+      "created_at": "2026-02-21T13:52:35.439332"
+    },
+    {
+      "tx_id": 2,
+      "sender": "0xeb00000000000000000000000000000000000004",
+      "receiver": "0xgi00000000000000000000000000000000000006",
+      "amount": "7",
+      "tx_hash": null,
+      "ipfs_cid": null,
+      "utxo_id": "utxo_5a06fc67006ea8b3",
+      "template_id": null,
+      "template_cid": null,
+      "template_snapshot_cid": null,
+      "status": "confirmed",
+      "created_at": "2026-02-21T13:52:46.354430"
+    },
+    {
+      "tx_id": 3,
+      "sender": "0xeb00000000000000000000000000000000000004",
+      "receiver": "0xbu00000000000000000000000000000000000005",
+      "amount": "12",
+      "tx_hash": null,
+      "ipfs_cid": null,
+      "utxo_id": "utxo_fada2285dd7c746e",
+      "template_id": null,
+      "template_cid": null,
+      "template_snapshot_cid": null,
+      "status": "confirmed",
+      "created_at": "2026-02-21T13:52:50.473107"
+    },
+    {
+      "tx_id": 4,
+      "sender": "0xeb00000000000000000000000000000000000004",
+      "receiver": "0xbu00000000000000000000000000000000000005",
+      "amount": "12",
+      "tx_hash": null,
+      "ipfs_cid": null,
+      "utxo_id": "utxo_8f4f1f4b045f5604",
+      "template_id": "tpl_b59f5f7370fe25c7",
+      "template_cid": null,
+      "template_snapshot_cid": null,
+      "status": "confirmed",
+      "created_at": "2026-02-21T13:53:20.327624"
+    }
+  ],
+  "templates_index": {
+    "tpl_b59f5f7370fe25c7": {
+      "owner": "0xeb00000000000000000000000000000000000004",
+      "template_name": "deneme",
+      "payee_name": "bahadır arslan",
+      "payee_account": "0xba00000000000000000000000000000000000001",
+      "default_amount": 500,
+      "description": "",
+      "cid": null,
+      "status": "active",
+      "pending_ipfs": true,
+      "created_at": "2026-02-21T13:52:28.885641",
+      "updated_at": "2026-02-21T13:52:28.885641",
+      "_backup_data": {
+        "template_name": "deneme",
+        "payee_name": "bahadır arslan",
+        "payee_account": "0xba00000000000000000000000000000000000001",
+        "default_amount": 500,
+        "description": "",
+        "owner_address": "0xeb00000000000000000000000000000000000004",
+        "created_at": "2026-02-21T13:52:28.885641",
+        "updated_at": "2026-02-21T13:52:28.885641"
+      }
+    }
+  },
   "metadata": {
-    "created_at": "2026-02-21T13:47:48.090759",
+    "created_at": "2026-02-21T13:51:42.855209",
     "version": "2.0",
     "currency": "DTL"
   }
